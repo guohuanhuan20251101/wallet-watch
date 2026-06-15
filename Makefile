@@ -7,7 +7,7 @@ init:
 	python -m app.db.init_db
 
 run:
-	streamlit run app/main.py --server.port 8501
+	streamlit run main.py --server.port 8501
 
 test:
 	python -m pytest tests/ -v

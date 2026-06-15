@@ -25,7 +25,7 @@ make init
 
 # 3. 启动
 make run
-# 或: streamlit run app/main.py
+# 或: streamlit run main.py
 
 # 4. 打开浏览器 http://localhost:8501
 ```
@@ -52,8 +52,8 @@ make run
 
 ```
 wallet-watch/
+├── main.py                      # Streamlit 入口
 ├── app/
-│   ├── main.py                  # Streamlit 入口
 │   ├── db/
 │   │   ├── models.py            # SQLAlchemy 星型模型
 │   │   └── init_db.py           # 建表 + 维度初始化
