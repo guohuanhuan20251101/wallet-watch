@@ -125,26 +125,14 @@ init_database()
 def load_all_transactions():
     session = get_session()
     try:
-        records = session.query(session.bind.raw_connection().execute(
-            "SELECT t.date_id, t.amount, t.merchant, t.description, "
-            "s.source_name as source, c.category_name as category, "
-            "t.transaction_type "
-            "FROM fact_transaction t "
-            "JOIN dim_source s ON t.source_id = s.source_id "
-            "JOIN dim_category c ON t.category_id = c.category_id "
-            "ORDER BY t.date_id DESC"
-        ).fetchall()
-        )  # 这个方法不太对，让我用 ORM
-
-        # 用 ORM 方式
         from app.db.models import FactTransaction, DimSource, DimCategory as DBCat
         txns = session.query(
-            FactTransaction.date_id,
+            FactTransaction.date_id.label("date"),
             FactTransaction.amount,
             FactTransaction.merchant,
             FactTransaction.description,
-            DimSource.source_name,
-            DBCat.category_name,
+            DimSource.source_name.label("source"),
+            DBCat.category_name.label("category"),
             FactTransaction.transaction_type,
         ).join(DimSource, FactTransaction.source_id == DimSource.source_id)\
          .join(DBCat, FactTransaction.category_id == DBCat.category_id)\
@@ -163,6 +151,7 @@ def load_all_transactions():
         ])
     finally:
         session.close()
+
 
 
 # ──────────────────── 保存到数据库 ────────────────────
