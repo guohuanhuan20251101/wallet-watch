@@ -83,6 +83,12 @@ def show_dashboard(df: pd.DataFrame):
     st.plotly_chart(year_over_year(df), use_container_width=True, key="dash_yoy")
     st.markdown('</div>', unsafe_allow_html=True)
 
+    # ── 消费洞察 ──
+    st.markdown('<div class="chart-box">', unsafe_allow_html=True)
+    st.markdown('<p class="section-title">💡 消费洞察</p>', unsafe_allow_html=True)
+    show_insights(df)
+    st.markdown('</div>', unsafe_allow_html=True)
+
     # ── 最近交易表格 ──
     st.markdown('<p class="section-title">🕐 最近交易记录</p>', unsafe_allow_html=True)
     recent = df.sort_values("date", ascending=False).head(15).copy()
@@ -233,3 +239,95 @@ def show_data_editor(df: pd.DataFrame):
                     st.rerun()
 
     session.close()
+
+
+def show_insights(df: pd.DataFrame):
+    """纯数据洞察，不说教"""
+    if df.empty or len(df) < 5:
+        st.info("数据太少，多上传几个月账单就能看到洞察了")
+        return
+
+    df = df.copy()
+    df["date_dt"] = pd.to_datetime(df["date"])
+    df["month"] = df["date_dt"].dt.to_period("M")
+    expense = df[df["transaction_type"] == "支出"]
+
+    if expense.empty:
+        return
+
+    months = sorted(df["month"].unique())
+    current_month = months[-1]
+    curr_expense = expense[expense["month"] == current_month]
+    curr_total = curr_expense["amount"].sum()
+    curr_days = curr_expense["date_dt"].dt.date.nunique()
+    curr_daily = curr_total / max(curr_days, 1)
+
+    insights = []
+
+    # 1. 本月概况
+    insights.append(f"📊 本月（{current_month}）共支出 **¥{curr_total:,.0f}**，"
+                    f"日均 **¥{curr_daily:.0f}**，共 {len(curr_expense)} 笔交易")
+
+    # 2. 环比变化
+    if len(months) >= 2:
+        prev_month = months[-2]
+        prev_expense = expense[expense["month"] == prev_month]
+        prev_total = prev_expense["amount"].sum()
+        if prev_total > 0:
+            change = curr_total - prev_total
+            pct = change / prev_total * 100
+            direction = "多" if change > 0 else "少"
+            insights.append(f"📈 比上月（{prev_month}）{direction}花了 **¥{abs(change):,.0f}**"
+                            f"（{pct:+.1f}%）")
+
+            # 哪个类别变化最大
+            curr_cat = curr_expense.groupby("category")["amount"].sum()
+            prev_cat = prev_expense.groupby("category")["amount"].sum()
+            cat_change = (curr_cat - prev_cat).abs()
+            if not cat_change.empty:
+                top_cat = cat_change.idxmax()
+                top_diff = curr_cat.get(top_cat, 0) - prev_cat.get(top_cat, 0)
+                if abs(top_diff) > 1:
+                    direction2 = "增加" if top_diff > 0 else "减少"
+                    insights.append(f"   → 变化最大是「{top_cat}」，比上月{direction2}了 **¥{abs(top_diff):,.0f}**")
+
+    # 3. 最大单笔
+    max_row = expense.loc[expense["amount"].idxmax()]
+    insights.append(f"💣 本月最大单笔消费：**¥{max_row['amount']:,.0f}**"
+                    f"（{max_row['date']} · {max_row['merchant']}）")
+
+    # 4. 高频消费
+    merchant_freq = expense["merchant"].value_counts()
+    if merchant_freq.iloc[0] >= 5:
+        top_merchant = merchant_freq.index[0]
+        top_count = merchant_freq.iloc[0]
+        top_merchant_total = expense[expense["merchant"] == top_merchant]["amount"].sum()
+        insights.append(f"🏪 本月在「{top_merchant}」消费了 **{top_count} 次**，"
+                        f"合计 ¥{top_merchant_total:,.0f}")
+
+    # 5. 周末 vs 工作日
+    df["dow"] = df["date_dt"].dt.dayofweek
+    weekend_expense = df[(df["dow"] >= 5) & (df["transaction_type"] == "支出")]
+    weekday_expense = df[(df["dow"] < 5) & (df["transaction_type"] == "支出")]
+    if len(weekend_expense) > 0 and len(weekday_expense) > 0:
+        we_daily = weekend_expense["amount"].sum() / max(weekend_expense["date_dt"].dt.date.nunique(), 1)
+        wd_daily = weekday_expense["amount"].sum() / max(weekday_expense["date_dt"].dt.date.nunique(), 1)
+        if wd_daily > 0:
+            ratio = we_daily / wd_daily
+            insights.append(f"📅 周末日均消费 **¥{we_daily:.0f}**，"
+                            f"工作日日均 **¥{wd_daily:.0f}**（周末是工作日的 {ratio:.1f} 倍）")
+
+    # 6. 入不敷出
+    income_total = df[df["transaction_type"] == "收入"]["amount"].sum()
+    if income_total < curr_total and income_total > 0:
+        gap = curr_total - income_total
+        insights.append(f"⚖️ 本月支出 ¥{curr_total:,.0f}，收入 ¥{income_total:,.0f}，"
+                        f"缺口 ¥{gap:,.0f}")
+
+    # 渲染
+    for insight in insights:
+        st.markdown(insight)
+
+    if not insights:
+        st.info("暂无足够数据生成洞察")
+
