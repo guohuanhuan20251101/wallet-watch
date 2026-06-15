@@ -292,30 +292,6 @@ with st.sidebar:
     st.caption("💡 数据存储在本地，不会上传到任何服务器")
 
 
-# ──────────────────── 页面路由 ────────────────────
-if "page" not in st.session_state:
-    st.session_state["page"] = "dashboard"
-
-if st.session_state["page"] == "history":
-    show_upload_history_page()
-else:
-    tab1, tab2, tab3, tab4 = st.tabs(["📊 总览", "📆 每日", "📅 月度", "📅 年度"])
-
-    df_all = load_all_transactions()
-
-    with tab1:
-        show_dashboard(df_all)
-    with tab2:
-        show_daily(df_all)
-    with tab3:
-        show_monthly(df_all)
-    with tab4:
-        show_yearly(df_all)
-
-    st.divider()
-    st.caption("💸 Wallet Watch · 数据存储于本地 SQLite · 不会上传到任何服务器")
-
-
 def show_upload_history_page():
     """历史上传文件 - 独立页面"""
     st.markdown("## 📂 历史上传文件")
@@ -356,13 +332,10 @@ def show_upload_history_page():
             st.markdown(f"### 📄 {display_name}")
             st.caption(f"上传批次: `{batch_name}` | {count} 条记录 | {dates[0]} ~ {dates[-1]}")
 
-            # 预览表格
             preview_data = []
             for t in batch_txns[:50]:
                 preview_data.append({
-                    "日期": str(t.date_id),
-                    "商户": t.merchant,
-                    "金额": t.amount,
+                    "日期": str(t.date_id), "商户": t.merchant, "金额": t.amount,
                     "类别": cats_map.get(t.category_id, "其他"),
                     "来源": srcs_map.get(t.source_id, "未知"),
                     "类型": t.transaction_type,
@@ -371,7 +344,6 @@ def show_upload_history_page():
             if len(batch_txns) > 50:
                 st.caption(f"... 还有 {len(batch_txns) - 50} 条")
 
-            # 操作按钮
             col_dl, col_del = st.columns(2)
             with col_dl:
                 export_data = []
@@ -415,3 +387,29 @@ def show_upload_history_page():
             st.divider()
         finally:
             session.close()
+
+
+# ──────────────────── 页面路由 ────────────────────
+if "page" not in st.session_state:
+    st.session_state["page"] = "dashboard"
+
+if st.session_state["page"] == "history":
+    show_upload_history_page()
+else:
+    tab1, tab2, tab3, tab4 = st.tabs(["📊 总览", "📆 每日", "📅 月度", "📅 年度"])
+
+    df_all = load_all_transactions()
+
+    with tab1:
+        show_dashboard(df_all)
+    with tab2:
+        show_daily(df_all)
+    with tab3:
+        show_monthly(df_all)
+    with tab4:
+        show_yearly(df_all)
+
+    st.divider()
+    st.caption("💸 Wallet Watch · 数据存储于本地 SQLite · 不会上传到任何服务器")
+
+
