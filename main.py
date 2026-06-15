@@ -168,8 +168,7 @@ def save_to_db(df: pd.DataFrame, batch_name: str):
         if src_id is None:
             continue
 
-        from app.db.models import FactTransaction as FT
-        existing = session.query(FT).filter_by(
+        existing = session.query(FactTransaction).filter_by(
             date_id=row["date"], amount=row["amount"], merchant=row["merchant"]
         ).first()
 
