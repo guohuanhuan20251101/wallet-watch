@@ -39,7 +39,7 @@ def show_yearly(df: pd.DataFrame):
     with col1:
         selected_year = st.selectbox("选择年份", years, key="heatmap_year")
 
-    st.plotly_chart(year_heatmap(view_df, selected_year), use_container_width=True)
+    st.plotly_chart(year_heatmap(view_df, selected_year), use_container_width=True, key="yearly_heatmap")
 
     # ---- 年度汇总表 ----
     st.subheader("📋 年度汇总")

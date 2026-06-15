@@ -52,13 +52,13 @@ def show_daily(df: pd.DataFrame):
     with tab1:
         st.plotly_chart(
             daily_bar_line(view_df, selected_month, selected_year),
-            use_container_width=True,
+            use_container_width=True, key="daily_bar",
         )
 
     with tab2:
         st.plotly_chart(
             monthly_category_stack(view_df, selected_month, selected_year),
-            use_container_width=True,
+            use_container_width=True, key="daily_stack",
         )
 
     # ---- 当月每日明细表 ----
