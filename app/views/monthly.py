@@ -34,7 +34,7 @@ def show_monthly(df: pd.DataFrame):
 
     # 月度趋势图
     st.subheader(f"📈 {selected_year}年 月度趋势")
-    st.plotly_chart(monthly_trend(year_df), use_container_width=True)
+    st.plotly_chart(monthly_trend(year_df), use_container_width=True, key="monthly_trend")
 
     # ---- 月度详细对比表 ----
     st.subheader(f"📋 {selected_year}年 月度详细数据")

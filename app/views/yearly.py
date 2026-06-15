@@ -31,7 +31,7 @@ def show_yearly(df: pd.DataFrame):
 
     # ---- 年度对比 ----
     st.subheader("📊 年度支出对比")
-    st.plotly_chart(year_over_year(view_df), use_container_width=True)
+    st.plotly_chart(year_over_year(view_df), use_container_width=True, key="yearly_yoy")
 
     # ---- 热力图 ----
     st.subheader("🔥 年度消费热力图")

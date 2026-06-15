@@ -42,19 +42,19 @@ def show_dashboard(df: pd.DataFrame):
     with col_left:
         st.markdown('<div class="chart-box">', unsafe_allow_html=True)
         st.markdown('<p class="section-title">📈 月度收支趋势</p>', unsafe_allow_html=True)
-        st.plotly_chart(monthly_trend(df), use_container_width=True)
+        st.plotly_chart(monthly_trend(df), use_container_width=True, key="dash_monthly")
         st.markdown('</div>', unsafe_allow_html=True)
 
     with col_right:
         st.markdown('<div class="chart-box">', unsafe_allow_html=True)
         st.markdown('<p class="section-title">🍩 消费类别分布</p>', unsafe_allow_html=True)
-        st.plotly_chart(category_pie(df), use_container_width=True)
+        st.plotly_chart(category_pie(df), use_container_width=True, key="dash_pie")
         st.markdown('</div>', unsafe_allow_html=True)
 
     # ── 年度对比 ──
     st.markdown('<div class="chart-box">', unsafe_allow_html=True)
     st.markdown('<p class="section-title">📅 年度支出对比</p>', unsafe_allow_html=True)
-    st.plotly_chart(year_over_year(df), use_container_width=True)
+    st.plotly_chart(year_over_year(df), use_container_width=True, key="dash_yoy")
     st.markdown('</div>', unsafe_allow_html=True)
 
     # ── 最近交易表格 ──
