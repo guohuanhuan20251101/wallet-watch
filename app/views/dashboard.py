@@ -115,9 +115,13 @@ def show_dashboard(df: pd.DataFrame):
     </table>
     """, unsafe_allow_html=True)
 
-    # ── 数据管理（编辑/删除/导出） ──
+    # ── 数据管理（编辑/删除/导出/上传历史） ──
     st.divider()
-    with st.expander("🔧 数据管理 - 修改分类 / 删除记录 / 导出报告"):
+    with st.expander("🔧 数据管理 - 修改分类 / 删除记录 / 导出报告 / 上传历史"):
+        # 上传历史
+        show_upload_history()
+
+        st.divider()
         # 导出按钮
         if not df.empty:
             output = io.BytesIO()
@@ -154,6 +158,58 @@ def show_dashboard(df: pd.DataFrame):
 
         st.divider()
         show_data_editor(df)
+
+
+def show_upload_history():
+    """显示上传历史"""
+    from app.db.models import get_session, FactTransaction
+    session = get_session()
+    try:
+        batches = session.query(
+            FactTransaction.upload_batch
+        ).filter(FactTransaction.upload_batch.isnot(None)).distinct().all()
+
+        if not batches:
+            st.caption("暂无上传记录")
+            return
+
+        history = []
+        for (batch,) in batches:
+            txns = session.query(FactTransaction).filter_by(upload_batch=batch).all()
+            if not txns:
+                continue
+            dates = [t.date_id for t in txns]
+            history.append({
+                "文件名": batch.rsplit("_", 2)[0] if "_" in batch else batch,
+                "上传时间": batch.rsplit("_", 1)[-1].split("_")[0] if "_" in batch else "未知",
+                "记录数": len(txns),
+                "日期范围": f"{min(dates)} ~ {max(dates)}",
+                "batch": batch,
+            })
+
+        if history:
+            st.markdown("**📂 上传历史**")
+            hist_df = pd.DataFrame(history)
+            st.dataframe(
+                hist_df[["文件名", "记录数", "日期范围"]],
+                use_container_width=True, hide_index=True,
+            )
+
+            # 删除某个批次
+            batch_to_delete = st.selectbox(
+                "选择要删除的批次（仅删除该批次数据，不影响其他批次）",
+                ["—"] + [h["batch"] for h in history],
+            )
+            if batch_to_delete != "—":
+                if st.button(f"🗑️ 删除批次「{batch_to_delete.rsplit('_', 2)[0]}」的数据", type="secondary"):
+                    count = session.query(FactTransaction).filter_by(
+                        upload_batch=batch_to_delete
+                    ).delete()
+                    session.commit()
+                    st.success(f"已删除 {count} 条记录")
+                    st.rerun()
+    finally:
+        session.close()
 
 
 def show_data_editor(df: pd.DataFrame):

@@ -238,6 +238,26 @@ with st.sidebar:
                 clean_df = clean_transactions(raw_df)
                 classified_df = classify_transactions(clean_df)
 
+                # ── 重叠检测 ──
+                existing_dates = load_all_transactions()
+                if not existing_dates.empty:
+                    new_dates = set(classified_df["date"].unique())
+                    old_dates = set(existing_dates["date"].unique())
+                    overlap_dates = new_dates & old_dates
+                    if overlap_dates:
+                        st.warning(f"⚠️ 有 {len(overlap_dates)} 天与已有数据重叠（{min(overlap_dates)} ~ {max(overlap_dates)}）")
+                        overlap_choice = st.radio(
+                            "重叠部分如何处理？",
+                            ["跳过重叠日期（保留已有数据）", "用新数据覆盖已有数据"],
+                            key="overlap_choice"
+                        )
+                        if overlap_choice == "跳过重叠日期（保留已有数据）":
+                            classified_df = classified_df[~classified_df["date"].isin(overlap_dates)]
+                            if classified_df.empty:
+                                st.info("去除重叠后无新数据")
+                                st.stop()
+                            st.caption(f"去除重叠后剩余 {len(classified_df)} 条新记录")
+
                 with st.expander("📋 预览", expanded=True):
                     preview = classified_df.head(8)[["date", "merchant", "category", "amount", "source"]]
                     preview["date"] = preview["date"].astype(str)
