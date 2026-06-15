@@ -210,7 +210,13 @@ with st.sidebar:
     uploaded_file = st.file_uploader(
         "选择文件", type=["csv", "xls", "xlsx", "pdf"],
         label_visibility="collapsed",
+        key="bill_uploader",
     )
+
+    # 刚导入完，跳过重新解析
+    if st.session_state.get("import_done"):
+        st.session_state["import_done"] = False
+        st.rerun()
 
     if uploaded_file:
         suffix = Path(uploaded_file.name).suffix
@@ -267,6 +273,7 @@ with st.sidebar:
                     batch = f"{uploaded_file.name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
                     new, skip = save_to_db(classified_df, batch)
                     if new > 0:
+                        st.session_state["import_done"] = True
                         st.success(f"导入 {new} 条" + (f"，跳过 {skip} 条重复" if skip else ""))
                         st.rerun()
                     else:
@@ -275,11 +282,51 @@ with st.sidebar:
             os.unlink(tmp_path)
 
     st.divider()
-    st.subheader("📂 过往上传文件")
 
-    # 查询上传批次
+    # 导航按钮
+    if st.button("📂 历史上传文件", use_container_width=True):
+        st.session_state["page"] = "history"
+        st.rerun()
+
+    st.divider()
+    st.caption("💡 数据存储在本地，不会上传到任何服务器")
+
+
+# ──────────────────── 页面路由 ────────────────────
+if "page" not in st.session_state:
+    st.session_state["page"] = "dashboard"
+
+if st.session_state["page"] == "history":
+    show_upload_history_page()
+else:
+    tab1, tab2, tab3, tab4 = st.tabs(["📊 总览", "📆 每日", "📅 月度", "📅 年度"])
+
+    df_all = load_all_transactions()
+
+    with tab1:
+        show_dashboard(df_all)
+    with tab2:
+        show_daily(df_all)
+    with tab3:
+        show_monthly(df_all)
+    with tab4:
+        show_yearly(df_all)
+
+    st.divider()
+    st.caption("💸 Wallet Watch · 数据存储于本地 SQLite · 不会上传到任何服务器")
+
+
+def show_upload_history_page():
+    """历史上传文件 - 独立页面"""
+    st.markdown("## 📂 历史上传文件")
+
+    if st.button("← 返回主页面"):
+        st.session_state["page"] = "dashboard"
+        st.rerun()
+
+    st.divider()
+
     session = get_session()
-    batches_raw = []
     try:
         batches_raw = session.query(
             FactTransaction.upload_batch
@@ -288,101 +335,83 @@ with st.sidebar:
         session.close()
 
     if not batches_raw:
-        st.caption("暂无上传记录")
-    else:
-        for (batch_name,) in batches_raw:
-            session = get_session()
-            try:
-                batch_txns = session.query(FactTransaction).filter_by(upload_batch=batch_name).all()
-                if not batch_txns:
-                    session.close()
-                    continue
-                dates = sorted([t.date_id for t in batch_txns])
-                count = len(batch_txns)
-                display_name = batch_name.rsplit("_", 2)[0] if "_" in batch_name else batch_name
+        st.info("暂无上传记录，请先在侧边栏上传账单")
+        return
 
-                with st.expander(f"📄 {display_name}  |  {count}条  |  {dates[0]} ~ {dates[-1]}"):
-                    # 预览数据
-                    preview_data = []
-                    cats_map = {c.category_id: c.category_name for c in session.query(DimCategory).all()}
-                    srcs_map = {s.source_id: s.source_name for s in session.query(DimSource).all()}
-                    for t in batch_txns[:20]:
-                        preview_data.append({
-                            "日期": str(t.date_id),
-                            "商户": t.merchant,
-                            "金额": t.amount,
-                            "类别": cats_map.get(t.category_id, "其他"),
-                            "来源": srcs_map.get(t.source_id, "未知"),
-                            "类型": t.transaction_type,
-                        })
-                    st.dataframe(pd.DataFrame(preview_data), use_container_width=True, hide_index=True)
-                    if len(batch_txns) > 20:
-                        st.caption(f"... 还有 {len(batch_txns) - 20} 条")
-
-                    col_dl, col_del = st.columns(2)
-                    with col_dl:
-                        # 下载
-                        export_data = []
-                        for t in batch_txns:
-                            cats_map2 = {c.category_id: c.category_name for c in session.query(DimCategory).all()}
-                            srcs_map2 = {s.source_id: s.source_name for s in session.query(DimSource).all()}
-                            export_data.append({
-                                "日期": str(t.date_id),
-                                "商户": t.merchant,
-                                "金额": t.amount,
-                                "类别": cats_map2.get(t.category_id, "其他"),
-                                "来源": srcs_map2.get(t.source_id, "未知"),
-                                "类型": t.transaction_type,
-                                "描述": t.description or "",
-                            })
-                        export_df = pd.DataFrame(export_data)
-                        csv_data = export_df.to_csv(index=False).encode("utf-8-sig")
-                        st.download_button(
-                            "📥 下载", csv_data,
-                            file_name=f"{display_name}.csv",
-                            mime="text/csv",
-                            key=f"dl_{batch_name}",
-                            use_container_width=True,
-                        )
-                    with col_del:
-                        if st.button("🗑️ 删除", key=f"del_{batch_name}", use_container_width=True):
-                            st.session_state[f"confirm_del_{batch_name}"] = True
-
-                    # 删除确认
-                    if st.session_state.get(f"confirm_del_{batch_name}"):
-                        st.warning(f"确定要删除「{display_name}」的 {count} 条数据吗？")
-                        c1, c2 = st.columns(2)
-                        with c1:
-                            if st.button("✅ 确认删除", key=f"yes_{batch_name}", use_container_width=True, type="primary"):
-                                s2 = get_session()
-                                s2.query(FactTransaction).filter_by(upload_batch=batch_name).delete()
-                                s2.commit()
-                                s2.close()
-                                load_all_transactions.clear()
-                                st.session_state[f"confirm_del_{batch_name}"] = False
-                                st.success("已删除")
-                                st.rerun()
-                        with c2:
-                            if st.button("❌ 取消", key=f"no_{batch_name}", use_container_width=True):
-                                st.session_state[f"confirm_del_{batch_name}"] = False
-                                st.rerun()
-            finally:
+    for (batch_name,) in batches_raw:
+        session = get_session()
+        try:
+            batch_txns = session.query(FactTransaction).filter_by(upload_batch=batch_name).all()
+            if not batch_txns:
                 session.close()
+                continue
 
-    st.divider()
-    st.caption("💡 数据存储在本地，不会上传到任何服务器")
+            dates = sorted([t.date_id for t in batch_txns])
+            count = len(batch_txns)
+            display_name = batch_name.rsplit("_", 2)[0] if "_" in batch_name else batch_name
 
+            cats_map = {c.category_id: c.category_name for c in session.query(DimCategory).all()}
+            srcs_map = {s.source_id: s.source_name for s in session.query(DimSource).all()}
 
-# ──────────────────── 页面路由 ────────────────────
-tab1, tab2, tab3, tab4 = st.tabs(["📊 总览", "📆 每日", "📅 月度", "📅 年度"])
+            st.markdown(f"### 📄 {display_name}")
+            st.caption(f"上传批次: `{batch_name}` | {count} 条记录 | {dates[0]} ~ {dates[-1]}")
 
-df_all = load_all_transactions()
+            # 预览表格
+            preview_data = []
+            for t in batch_txns[:50]:
+                preview_data.append({
+                    "日期": str(t.date_id),
+                    "商户": t.merchant,
+                    "金额": t.amount,
+                    "类别": cats_map.get(t.category_id, "其他"),
+                    "来源": srcs_map.get(t.source_id, "未知"),
+                    "类型": t.transaction_type,
+                })
+            st.dataframe(pd.DataFrame(preview_data), use_container_width=True, hide_index=True)
+            if len(batch_txns) > 50:
+                st.caption(f"... 还有 {len(batch_txns) - 50} 条")
 
-with tab1:
-    show_dashboard(df_all)
-with tab2:
-    show_daily(df_all)
-with tab3:
-    show_monthly(df_all)
-with tab4:
-    show_yearly(df_all)
+            # 操作按钮
+            col_dl, col_del = st.columns(2)
+            with col_dl:
+                export_data = []
+                for t in batch_txns:
+                    all_cats = {c.category_id: c.category_name for c in session.query(DimCategory).all()}
+                    all_srcs = {s.source_id: s.source_name for s in session.query(DimSource).all()}
+                    export_data.append({
+                        "日期": str(t.date_id), "商户": t.merchant, "金额": t.amount,
+                        "类别": all_cats.get(t.category_id, "其他"),
+                        "来源": all_srcs.get(t.source_id, "未知"),
+                        "类型": t.transaction_type,
+                    })
+                csv_data = pd.DataFrame(export_data).to_csv(index=False).encode("utf-8-sig")
+                st.download_button(
+                    f"📥 下载 {display_name}.csv", csv_data,
+                    file_name=f"{display_name}.csv", mime="text/csv",
+                    key=f"history_dl_{batch_name}",
+                )
+            with col_del:
+                if st.button(f"🗑️ 删除此文件数据", key=f"history_del_{batch_name}"):
+                    st.session_state[f"history_confirm_{batch_name}"] = True
+                    st.rerun()
+
+            if st.session_state.get(f"history_confirm_{batch_name}"):
+                st.warning(f"确定要删除「{display_name}」的 {count} 条数据吗？")
+                c1, c2 = st.columns(2)
+                with c1:
+                    if st.button("✅ 确认", key=f"hist_yes_{batch_name}", type="primary"):
+                        s2 = get_session()
+                        s2.query(FactTransaction).filter_by(upload_batch=batch_name).delete()
+                        s2.commit()
+                        s2.close()
+                        st.session_state[f"history_confirm_{batch_name}"] = False
+                        st.success(f"已删除「{display_name}」")
+                        st.rerun()
+                with c2:
+                    if st.button("❌ 取消", key=f"hist_no_{batch_name}"):
+                        st.session_state[f"history_confirm_{batch_name}"] = False
+                        st.rerun()
+
+            st.divider()
+        finally:
+            session.close()
