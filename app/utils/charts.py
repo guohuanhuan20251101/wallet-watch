@@ -95,16 +95,6 @@ def monthly_trend(df: pd.DataFrame):
             hovertemplate=f"{col}: ¥{{y:.0f}}",
         ))
 
-    # 添加入不敷出标记
-    if "支出" in monthly.columns and "收入" in monthly.columns:
-        for i, row in monthly.iterrows():
-            if row["支出"] > row["收入"]:
-                fig.add_annotation(
-                    x=row["year_month"], y=row["支出"],
-                    text="⚠️", showarrow=False, font=dict(size=16),
-                    yshift=15,
-                )
-
     fig.update_layout(
         title="月度收支趋势",
         xaxis_title="",
