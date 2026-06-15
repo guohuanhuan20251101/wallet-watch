@@ -3,6 +3,7 @@
 """
 import streamlit as st
 import pandas as pd
+import io
 from app.transform.cleaner import get_summary_stats
 from app.utils.charts import monthly_trend, category_pie, year_over_year
 
@@ -35,14 +36,33 @@ def show_dashboard(df: pd.DataFrame):
     # 日期范围
     st.caption(f"📅 {stats['date_range']}")
 
+    # ── 第二行：统计指标 ──
+    expense_df = df[df["transaction_type"] == "支出"]
+    if not expense_df.empty:
+        daily_expense = expense_df.groupby("date")["amount"].sum()
+        cols2 = st.columns(3)
+        with cols2[0]:
+            st.metric("📆 日均支出", f"¥{daily_expense.mean():.0f}")
+        with cols2[1]:
+            st.metric("🔺 最高单日支出", f"¥{daily_expense.max():.0f}")
+        with cols2[2]:
+            st.metric("🔻 最低单日支出", f"¥{daily_expense[daily_expense > 0].min():.0f}")
+
     st.divider()
 
-    # ── 图表行 ──
+    # ── 商家 TOP10 + 图表行 ──
     col_left, col_right = st.columns(2)
     with col_left:
         st.markdown('<div class="chart-box">', unsafe_allow_html=True)
-        st.markdown('<p class="section-title">📈 月度收支趋势</p>', unsafe_allow_html=True)
-        st.plotly_chart(monthly_trend(df), use_container_width=True, key="dash_monthly")
+        st.markdown('<p class="section-title">🏪 商家消费 TOP10</p>', unsafe_allow_html=True)
+        if not expense_df.empty:
+            merchant_top = expense_df.groupby("merchant").agg(
+                金额=("amount", "sum"), 次数=("amount", "count")
+            ).sort_values("金额", ascending=False).head(10).reset_index()
+            merchant_top["金额"] = merchant_top["金额"].round(2)
+            merchant_top.index = range(1, len(merchant_top) + 1)
+            merchant_top.index.name = "排名"
+            st.dataframe(merchant_top, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
     with col_right:
@@ -50,6 +70,12 @@ def show_dashboard(df: pd.DataFrame):
         st.markdown('<p class="section-title">🍩 消费类别分布</p>', unsafe_allow_html=True)
         st.plotly_chart(category_pie(df), use_container_width=True, key="dash_pie")
         st.markdown('</div>', unsafe_allow_html=True)
+
+    # ── 月度趋势（独立一行）──
+    st.markdown('<div class="chart-box">', unsafe_allow_html=True)
+    st.markdown('<p class="section-title">📈 月度收支趋势</p>', unsafe_allow_html=True)
+    st.plotly_chart(monthly_trend(df), use_container_width=True, key="dash_monthly")
+    st.markdown('</div>', unsafe_allow_html=True)
 
     # ── 年度对比 ──
     st.markdown('<div class="chart-box">', unsafe_allow_html=True)
@@ -83,9 +109,44 @@ def show_dashboard(df: pd.DataFrame):
     </table>
     """, unsafe_allow_html=True)
 
-    # ── 数据管理（编辑/删除） ──
+    # ── 数据管理（编辑/删除/导出） ──
     st.divider()
-    with st.expander("🔧 数据管理 - 修改分类 / 删除记录"):
+    with st.expander("🔧 数据管理 - 修改分类 / 删除记录 / 导出报告"):
+        # 导出按钮
+        if not df.empty:
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine="openpyxl") as writer:
+                # 汇总
+                summary_data = {
+                    "指标": ["总支出", "总收入", "交易笔数", "日均支出"],
+                    "数值": [stats["total_expense"], stats["total_income"],
+                            stats["transaction_count"], stats["avg_daily_expense"]],
+                }
+                pd.DataFrame(summary_data).to_excel(writer, sheet_name="汇总", index=False)
+
+                # 分类统计
+                expense_df2 = df[df["transaction_type"] == "支出"]
+                if not expense_df2.empty:
+                    cat_summary = expense_df2.groupby("category")["amount"].agg(["sum", "count", "mean"]).round(2)
+                    cat_summary.columns = ["总金额", "笔数", "平均金额"]
+                    cat_summary.to_excel(writer, sheet_name="分类统计")
+
+                # 每日汇总
+                daily_sum = df.groupby("date")["amount"].agg(["sum", "count"])
+                daily_sum.columns = ["总金额", "笔数"]
+                daily_sum.to_excel(writer, sheet_name="每日汇总")
+
+                # 全部明细
+                df.to_excel(writer, sheet_name="明细数据", index=False)
+
+            st.download_button(
+                label="📥 导出 Excel 报告",
+                data=output.getvalue(),
+                file_name=f"wallet_watch_report_{pd.Timestamp.now().strftime('%Y%m%d')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+
+        st.divider()
         show_data_editor(df)
 
 
