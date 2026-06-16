@@ -1,0 +1,8 @@
+[client]
+# 隐藏开发者工具栏，避免用户按 C 键触发 "Clear caches" 弹窗
+toolbarMode = "viewer"
+
+[server]
+# 启用跨域
+enableCORS = false
+enableXsrfProtection = false

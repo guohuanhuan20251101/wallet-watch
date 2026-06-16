@@ -233,6 +233,8 @@ def show_insights(df: pd.DataFrame):
         st.info("数据太少，多上传几个月账单就能看到洞察了")
         return
 
+    from datetime import datetime
+
     df = df.copy()
     df["date_dt"] = pd.to_datetime(df["date"])
     df["month"] = df["date_dt"].dt.to_period("M")
@@ -241,9 +243,17 @@ def show_insights(df: pd.DataFrame):
     if expense.empty:
         return
 
+    # 获取真正的当前月份和数据最新月份
+    now = pd.Timestamp.now()
+    current_real_month = now.to_period("M")
     months = sorted(df["month"].unique())
-    current_month = months[-1]
-    curr_expense = expense[expense["month"] == current_month]
+    latest_data_month = months[-1]
+
+    # 判断是否真的是"本月"
+    is_current_month = (latest_data_month == current_real_month)
+    month_label = "本月" if is_current_month else f"最新数据月（{latest_data_month}）"
+
+    curr_expense = expense[expense["month"] == latest_data_month]
     curr_total = curr_expense["amount"].sum()
     curr_days = curr_expense["date_dt"].dt.date.nunique()
     curr_daily = curr_total / max(curr_days, 1)
@@ -251,7 +261,7 @@ def show_insights(df: pd.DataFrame):
     insights = []
 
     # 1. 本月概况
-    insights.append(f"📊 本月（{current_month}）共支出 **¥{curr_total:,.0f}**，"
+    insights.append(f"📊 {month_label}共支出 **¥{curr_total:,.0f}**，"
                     f"日均 **¥{curr_daily:.0f}**，共 {len(curr_expense)} 笔交易")
 
     # 2. 环比变化
@@ -277,24 +287,25 @@ def show_insights(df: pd.DataFrame):
                     direction2 = "增加" if top_diff > 0 else "减少"
                     insights.append(f"   → 变化最大是「{top_cat}」，比上月{direction2}了 **¥{abs(top_diff):,.0f}**")
 
-    # 3. 最大单笔
-    max_row = expense.loc[expense["amount"].idxmax()]
-    insights.append(f"💣 本月最大单笔消费：**¥{max_row['amount']:,.0f}**"
+    # 3. 最大单笔（只看当前分析月）
+    max_row = curr_expense.loc[curr_expense["amount"].idxmax()]
+    insights.append(f"💣 {month_label}最大单笔消费：**¥{max_row['amount']:,.0f}**"
                     f"（{max_row['date']} · {max_row['merchant']}）")
 
-    # 4. 高频消费
-    merchant_freq = expense["merchant"].value_counts()
-    if merchant_freq.iloc[0] >= 5:
+    # 4. 高频消费（只看当前分析月）
+    merchant_freq = curr_expense["merchant"].value_counts()
+    if len(merchant_freq) > 0 and merchant_freq.iloc[0] >= 5:
         top_merchant = merchant_freq.index[0]
         top_count = merchant_freq.iloc[0]
-        top_merchant_total = expense[expense["merchant"] == top_merchant]["amount"].sum()
-        insights.append(f"🏪 本月在「{top_merchant}」消费了 **{top_count} 次**，"
+        top_merchant_total = curr_expense[curr_expense["merchant"] == top_merchant]["amount"].sum()
+        insights.append(f"🏪 {month_label}在「{top_merchant}」消费了 **{top_count} 次**，"
                         f"合计 ¥{top_merchant_total:,.0f}")
 
-    # 5. 周末 vs 工作日
-    df["dow"] = df["date_dt"].dt.dayofweek
-    weekend_expense = df[(df["dow"] >= 5) & (df["transaction_type"] == "支出")]
-    weekday_expense = df[(df["dow"] < 5) & (df["transaction_type"] == "支出")]
+    # 5. 周末 vs 工作日（只看当前分析月）
+    curr_all = df[df["month"] == latest_data_month].copy()
+    curr_all["dow"] = curr_all["date_dt"].dt.dayofweek
+    weekend_expense = curr_all[(curr_all["dow"] >= 5) & (curr_all["transaction_type"] == "支出")]
+    weekday_expense = curr_all[(curr_all["dow"] < 5) & (curr_all["transaction_type"] == "支出")]
     if len(weekend_expense) > 0 and len(weekday_expense) > 0:
         we_daily = weekend_expense["amount"].sum() / max(weekend_expense["date_dt"].dt.date.nunique(), 1)
         wd_daily = weekday_expense["amount"].sum() / max(weekday_expense["date_dt"].dt.date.nunique(), 1)
@@ -303,11 +314,11 @@ def show_insights(df: pd.DataFrame):
             insights.append(f"📅 周末日均消费 **¥{we_daily:.0f}**，"
                             f"工作日日均 **¥{wd_daily:.0f}**（周末是工作日的 {ratio:.1f} 倍）")
 
-    # 6. 入不敷出
-    income_total = df[df["transaction_type"] == "收入"]["amount"].sum()
+    # 6. 入不敷出（只看当前分析月）
+    income_total = df[(df["month"] == latest_data_month) & (df["transaction_type"] == "收入")]["amount"].sum()
     if income_total < curr_total and income_total > 0:
         gap = curr_total - income_total
-        insights.append(f"⚖️ 本月支出 ¥{curr_total:,.0f}，收入 ¥{income_total:,.0f}，"
+        insights.append(f"⚖️ {month_label}支出 ¥{curr_total:,.0f}，收入 ¥{income_total:,.0f}，"
                         f"缺口 ¥{gap:,.0f}")
 
     # 渲染
