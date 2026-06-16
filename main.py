@@ -202,6 +202,12 @@ st.markdown('<div class="nav-bar">'
 
 # ──────────────────── 侧边栏（可折叠） ────────────────────
 with st.sidebar:
+    # 刚导入完，清空上传器状态并刷新（必须在 file_uploader 之前执行）
+    if st.session_state.get("import_done"):
+        st.session_state["import_done"] = False
+        st.session_state.pop("bill_uploader", None)
+        st.rerun()
+
     st.markdown("### 📤 导入账单")
 
     upload_type = st.selectbox(
@@ -215,12 +221,6 @@ with st.sidebar:
         label_visibility="collapsed",
         key="bill_uploader",
     )
-
-    # 刚导入完，清空上传器状态并刷新
-    if st.session_state.get("import_done"):
-        st.session_state["import_done"] = False
-        st.session_state.pop("bill_uploader", None)
-        st.rerun()
 
     if uploaded_file:
         suffix = Path(uploaded_file.name).suffix

@@ -17,20 +17,27 @@ def get_all_categories() -> list[str]:
 
 
 def _render_aggrid(df: pd.DataFrame, key: str):
-    """用 AgGrid 渲染表格（中文菜单、Excel 式列筛选、右边界固定）"""
+    """用 AgGrid 渲染表格（中文菜单、筛选、右边界自动填充）"""
     gb = GridOptionsBuilder.from_dataframe(df)
-    # 所有列禁止移动（防止列边框被拖走导致右边界漂移）
+    # 所有列禁止移动位置（防止列边框被拖走导致右边界漂移）
     gb.configure_default_column(
         sortable=True,
         filter=True,
         suppressMovable=True,
-        filterParams={"buttons": ["apply", "reset"], "closeOnApply": True},
+        minWidth=80,
     )
-    # 最后一列不可调整宽度 → 右边界钉在容器最右侧
+    # 最后一列 flex=1 → 自动填满右侧剩余空间，右边界永远贴着容器最右边
     last_col = str(df.columns[-1])
-    gb.configure_column(last_col, resizable=False)
+    gb.configure_column(last_col, flex=1)
+    # 金额列宽度稍大，避免筛选图标和文字重叠
+    for col in df.columns:
+        if "金额" in str(col) or "总支出" in str(col) or "总收入" in str(col) or "结余" in str(col) or "日均" in str(col):
+            gb.configure_column(str(col), minWidth=100, filter="agNumberColumnFilter")
+        elif "日期" in str(col) or "月份" in str(col):
+            gb.configure_column(str(col), minWidth=90)
+    # 中文筛选菜单
     gb.configure_grid_options(
-        localeText="zh-CN",
+        localeText=_aggrid_zh_locale(),
         domLayout="autoHeight",
     )
     grid_options = gb.build()
@@ -42,6 +49,78 @@ def _render_aggrid(df: pd.DataFrame, key: str):
         allow_unsafe_jscode=True,
         key=key,
     )
+
+
+def _aggrid_zh_locale() -> dict:
+    """AgGrid 筛选/排序菜单的中文翻译"""
+    return {
+        # 列头菜单
+        "pinColumn": "固定列",
+        "pinLeft": "固定到左侧",
+        "pinRight": "固定到右侧",
+        "unpin": "取消固定",
+        "valueAggregation": "数值聚合",
+        "autosizeThiscolumn": "自动调整此列宽度",
+        "autosizeAllColumns": "自动调整所有列宽度",
+        "groupBy": "分组",
+        "ungroupBy": "取消分组",
+        "resetColumns": "重置列",
+        "expandAll": "展开所有",
+        "collapseAll": "折叠所有",
+        "copy": "复制",
+        "ctrlC": "Ctrl+C",
+        "copyWithGroupHeaders": "复制（含组标题）",
+        "copyWithHeaders": "复制（含列头）",
+        "paste": "粘贴",
+        # 排序
+        "sortAscending": "升序排序",
+        "sortDescending": "降序排序",
+        "sortUnSort": "取消排序",
+        # 筛选
+        "filter": "筛选",
+        "filters": "筛选",
+        "applyFilter": "应用筛选",
+        "resetFilter": "重置筛选",
+        "clearFilter": "清除筛选",
+        "andCondition": "并且",
+        "orCondition": "或者",
+        "contains": "包含",
+        "notContains": "不包含",
+        "equals": "等于",
+        "notEqual": "不等于",
+        "startsWith": "开始于",
+        "endsWith": "结束于",
+        "lessThan": "小于",
+        "greaterThan": "大于",
+        "lessThanOrEqual": "小于或等于",
+        "greaterThanOrEqual": "大于或等于",
+        "inRange": "在范围内",
+        "inRangeStart": "从",
+        "inRangeEnd": "到",
+        "blank": "空白",
+        "notBlank": "非空白",
+        # 筛选按钮
+        "apply": "应用",
+        "reset": "重置",
+        "clear": "清除",
+        # 日期筛选
+        "dateFormatOoo": "yyyy-mm-dd",
+        # 选择筛选
+        "selectAll": "选择全部",
+        "selectAllSearchResults": "选择搜索结果",
+        "addCurrentSelectionToFilter": "将当前选择加入筛选",
+        # 搜索框
+        "searchOoo": "搜索...",
+        "noMatches": "无匹配结果",
+        # 数字筛选
+        "equalsTo": "等于",
+        "notEqualsTo": "不等于",
+        "lessThanTo": "小于",
+        "greaterThanTo": "大于",
+        # 通用
+        "noRowsToShow": "暂无数据",
+        "enabled": "启用",
+    }
 
 
 def render_editable_table(

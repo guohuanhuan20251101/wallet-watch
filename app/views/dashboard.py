@@ -51,7 +51,7 @@ def show_dashboard(df: pd.DataFrame):
 
     st.divider()
 
-    # ── 商家 TOP10 + 图表行 ──
+    # ── 商家 TOP10 + 消费类别分布 ──
     col_left, col_right = st.columns(2)
     with col_left:
         st.markdown('<div class="chart-box">', unsafe_allow_html=True)
@@ -71,18 +71,6 @@ def show_dashboard(df: pd.DataFrame):
         st.markdown('<p class="section-title">🍩 消费类别分布</p>', unsafe_allow_html=True)
         st.plotly_chart(category_pie(df), use_container_width=True, key="dash_pie")
         st.markdown('</div>', unsafe_allow_html=True)
-
-    # ── 月度趋势（独立一行）──
-    st.markdown('<div class="chart-box">', unsafe_allow_html=True)
-    st.markdown('<p class="section-title">📈 月度收支趋势</p>', unsafe_allow_html=True)
-    st.plotly_chart(monthly_trend(df), use_container_width=True, key="dash_monthly")
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    # ── 年度对比 ──
-    st.markdown('<div class="chart-box">', unsafe_allow_html=True)
-    st.markdown('<p class="section-title">📅 年度支出对比</p>', unsafe_allow_html=True)
-    st.plotly_chart(year_over_year(df), use_container_width=True, key="dash_yoy")
-    st.markdown('</div>', unsafe_allow_html=True)
 
     # ── 消费洞察 ──
     st.markdown('<div class="chart-box">', unsafe_allow_html=True)
