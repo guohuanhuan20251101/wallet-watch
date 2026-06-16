@@ -1,6 +1,7 @@
 """
 初始化数据库：建表 + 预置维度数据
 """
+import os
 from datetime import date, timedelta
 from app.db.models import Base, engine, Session, DimDate, DimCategory, DimSource
 
@@ -87,8 +88,29 @@ def init_dim_source():
     print("✅ 来源维度表初始化完成")
 
 
+def _migrate_add_trade_time():
+    """为旧版本数据库补充 trade_time 列"""
+    import sqlite3
+    db_path = engine.url.database
+    if not db_path or not os.path.exists(db_path):
+        return
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.execute("PRAGMA table_info(fact_transaction)")
+        columns = [row[1] for row in cursor.fetchall()]
+        if "trade_time" not in columns:
+            conn.execute("ALTER TABLE fact_transaction ADD COLUMN trade_time VARCHAR(10)")
+            conn.commit()
+            print("✅ 数据库迁移：已添加 trade_time 列")
+        conn.close()
+    except Exception as e:
+        print(f"⚠️ 迁移 trade_time 列失败（可忽略）: {e}")
+
+
 def init_all():
     Base.metadata.create_all(engine)
+    # 迁移：为旧数据库补充 trade_time 列
+    _migrate_add_trade_time()
     init_dim_date()
     init_dim_category()
     init_dim_source()

@@ -92,7 +92,7 @@ def monthly_trend(df: pd.DataFrame):
             x=monthly["year_month"], y=monthly[col],
             name=col,
             marker_color=colors.get(col, "#636EFA"),
-            hovertemplate=f"{col}: ¥{{y:.0f}}",
+            hovertemplate=col + ": ¥%{y:,.0f}<extra></extra>",
         ))
 
     fig.update_layout(

@@ -129,6 +129,7 @@ def load_all_transactions():
         txns = session.query(
             FactTransaction.transaction_id,
             FactTransaction.date_id.label("date"),
+            FactTransaction.trade_time,
             FactTransaction.amount,
             FactTransaction.merchant,
             FactTransaction.description,
@@ -142,12 +143,12 @@ def load_all_transactions():
 
         if not txns:
             return pd.DataFrame(columns=[
-                "transaction_id", "date", "amount", "merchant", "description",
+                "transaction_id", "date", "trade_time", "amount", "merchant", "description",
                 "source", "category", "transaction_type"
             ])
 
         return pd.DataFrame(txns, columns=[
-            "transaction_id", "date", "amount", "merchant", "description",
+            "transaction_id", "date", "trade_time", "amount", "merchant", "description",
             "source", "category", "transaction_type"
         ])
     finally:
@@ -180,6 +181,7 @@ def save_to_db(df: pd.DataFrame, batch_name: str):
         session.add(FactTransaction(
             date_id=row["date"], category_id=cat_id, source_id=src_id,
             amount=row["amount"], merchant=row["merchant"],
+            trade_time=str(row.get("trade_time", "")) if pd.notna(row.get("trade_time")) else None,
             description=str(row.get("description", "")),
             transaction_type=row["transaction_type"],
             upload_batch=batch_name, created_at=datetime.now(),

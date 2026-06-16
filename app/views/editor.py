@@ -21,14 +21,16 @@ def render_editable_table(
     title: str = "交易记录",
     max_rows: int = 50,
     show_source: bool = True,
+    show_time: bool = False,
 ):
     """
     可编辑的交易表格组件
-    - 默认显示模式，右上角有 ✏️ 编辑按钮
-    - 点击后切换到编辑模式，可直接在表内修改类别和类型
+    - 显示模式：st.dataframe，支持点击列头排序、搜索筛选（无需进入编辑模式）
+    - 编辑模式：st.data_editor，可直接在表内修改类别和类型
+    - 退出编辑时如有未保存修改，弹出确认提示
     - 只保存被修改的行
 
-    要求 df 包含列: transaction_id, date, amount, merchant, category, source, transaction_type
+    要求 df 包含列: transaction_id, date, trade_time, amount, merchant, category, source, transaction_type
     """
     if df.empty:
         st.info("暂无数据")
@@ -42,65 +44,75 @@ def render_editable_table(
         st.markdown(f'<p class="section-title">{title}</p>', unsafe_allow_html=True)
 
     edit_key = f"{key_prefix}_edit_mode"
+    unsaved_key = f"{key_prefix}_unsaved"
+
     if edit_key not in st.session_state:
         st.session_state[edit_key] = False
 
+    # ── 处理退出确认 ──
+    from_editor_key = f"{key_prefix}_editor"
+    if st.session_state.get(unsaved_key):
+        st.warning("⚠️ 表格中有未保存的修改，确定要放弃吗？")
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("🗑️ 放弃修改", key=f"{key_prefix}_discard"):
+                st.session_state[edit_key] = False
+                st.session_state[unsaved_key] = False
+                st.rerun()
+        with c2:
+            if st.button("📝 继续编辑", key=f"{key_prefix}_keep"):
+                st.session_state[unsaved_key] = False
+                st.rerun()
+
+    # ── 退出编辑时检测未保存修改 ──
     with col_btn:
         if st.session_state[edit_key]:
             if st.button("🔒 退出编辑", key=f"{key_prefix}_exit", use_container_width=True):
+                # 检查是否有未保存修改
+                if from_editor_key in st.session_state:
+                    edited = st.session_state[from_editor_key]
+                    # 重建 editor_df 来比对
+                    editor_df = _build_editor_df(df.head(max_rows), show_source, show_time)
+                    if _has_changes(editor_df, edited):
+                        st.session_state[unsaved_key] = True
+                        st.rerun()
                 st.session_state[edit_key] = False
                 st.rerun()
         else:
             if st.button("✏️ 编辑", key=f"{key_prefix}_enter", use_container_width=True):
                 st.session_state[edit_key] = True
+                st.session_state[unsaved_key] = False
                 st.rerun()
 
     # ── 限制显示行数 ──
     display_df = df.head(max_rows).copy()
 
     if not st.session_state[edit_key]:
-        # ── 显示模式：好看的静态表格 ──
-        rows_html = ""
-        for _, row in display_df.iterrows():
-            src_cls = "wechat" if str(row["source"]) == "微信" else "alipay"
-            amt_cls = "amount-expense" if row["transaction_type"] == "支出" else "amount-income"
-            rows_html += f"""
-            <tr>
-                <td>{row['date']}</td>
-                <td>{row['merchant']}</td>
-                <td><span class="badge">{row['category']}</span></td>
-                <td class="{amt_cls}">¥{row['amount']:.2f}</td>
-                <td><span class="badge {src_cls}">{row['source']}</span></td>
-            </tr>"""
+        # ── 显示模式：st.dataframe（支持列头排序、搜索筛选）──
+        show_cols = ["date", "merchant", "category", "amount"]
+        col_names = {"date": "日期", "merchant": "商户", "category": "类别", "amount": "金额"}
+        if show_time and "trade_time" in display_df.columns:
+            show_cols.insert(1, "trade_time")
+            col_names["trade_time"] = "时间"
+        if show_source:
+            show_cols.append("source")
+            col_names["source"] = "来源"
+        show_cols.append("transaction_type")
+        col_names["transaction_type"] = "收支"
 
-        st.markdown(f"""
-        <table class="styled-table">
-            <thead><tr>
-                <th>日期</th><th>商户</th><th>类别</th><th>金额</th><th>来源</th>
-            </tr></thead>
-            <tbody>{rows_html}</tbody>
-        </table>
-        """, unsafe_allow_html=True)
+        view_df = display_df[show_cols].rename(columns=col_names).reset_index(drop=True)
+        st.dataframe(
+            view_df,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "金额": st.column_config.NumberColumn(format="¥%.2f"),
+            },
+        )
 
     else:
         # ── 编辑模式：st.data_editor ──
-        edit_cols = ["date", "merchant", "amount", "category", "transaction_type"]
-        if show_source:
-            edit_cols.insert(4, "source")
-
-        editor_df = display_df[edit_cols].copy()
-        editor_df.rename(columns={
-            "date": "日期",
-            "merchant": "商户",
-            "amount": "金额",
-            "source": "来源",
-            "category": "类别",
-            "transaction_type": "类型",
-        }, inplace=True)
-
-        # 重置索引，保证 edited 和 editor_df 行号一致
-        editor_df.reset_index(drop=True, inplace=True)
-
+        editor_df = _build_editor_df(display_df, show_source, show_time)
         # 加回 transaction_id 用于后续保存
         editor_df["_tid"] = display_df["transaction_id"].values
 
@@ -108,6 +120,7 @@ def render_editable_table(
             editor_df,
             column_config={
                 "日期": st.column_config.TextColumn(disabled=True),
+                "时间": st.column_config.TextColumn(disabled=True),
                 "商户": st.column_config.TextColumn(disabled=True),
                 "金额": st.column_config.NumberColumn(disabled=True, format="¥%.2f"),
                 "来源": st.column_config.TextColumn(disabled=True),
@@ -115,7 +128,7 @@ def render_editable_table(
                     options=all_cats,
                     required=True,
                 ),
-                "类型": st.column_config.SelectboxColumn(
+                "收支": st.column_config.SelectboxColumn(
                     options=["支出", "收入"],
                     required=True,
                 ),
@@ -124,29 +137,68 @@ def render_editable_table(
             use_container_width=True,
             hide_index=True,
             num_rows="fixed",
-            key=f"{key_prefix}_editor",
+            key=from_editor_key,
         )
+
+        # ── 手动存到 session_state 以便退出时比对 ──
+        st.session_state[from_editor_key] = edited
 
         if st.button("💾 保存修改", key=f"{key_prefix}_save", type="primary"):
             changed = 0
-            # 用 loc 按位置索引比对，因为两个 df 行数和顺序应一致
             for idx in range(len(editor_df)):
                 if idx >= len(edited):
                     break
                 orig = editor_df.iloc[idx]
                 curr = edited.iloc[idx]
-                if curr["类别"] != orig["类别"] or curr["类型"] != orig["类型"]:
+                if curr["类别"] != orig["类别"] or curr["收支"] != orig["收支"]:
                     tid = int(orig["_tid"])
-                    _update_transaction(tid, curr["类别"], curr["类型"])
+                    _update_transaction(tid, curr["类别"], curr["收支"])
                     changed += 1
 
             if changed > 0:
                 st.cache_data.clear()
                 st.success(f"✅ 已保存 {changed} 条修改，刷新页面即可生效")
                 st.session_state[edit_key] = False
+                st.session_state[unsaved_key] = False
+                st.session_state.pop(from_editor_key, None)
                 st.rerun()
             else:
                 st.info("没有检测到修改")
+
+
+def _build_editor_df(display_df: pd.DataFrame, show_source: bool, show_time: bool) -> pd.DataFrame:
+    """构建编辑器 DataFrame，统一列名和顺序"""
+    base_cols = ["date", "merchant", "amount"]
+    col_rename = {"date": "日期", "merchant": "商户", "amount": "金额"}
+
+    if show_time and "trade_time" in display_df.columns:
+        base_cols.insert(1, "trade_time")
+        col_rename["trade_time"] = "时间"
+
+    if show_source:
+        base_cols.append("source")
+        col_rename["source"] = "来源"
+
+    base_cols.extend(["category", "transaction_type"])
+    col_rename["category"] = "类别"
+    col_rename["transaction_type"] = "收支"
+
+    editor_df = display_df[base_cols].copy()
+    editor_df.rename(columns=col_rename, inplace=True)
+    editor_df.reset_index(drop=True, inplace=True)
+    return editor_df
+
+
+def _has_changes(editor_df: pd.DataFrame, edited: pd.DataFrame) -> bool:
+    """检测编辑后的 DataFrame 是否有修改"""
+    if len(editor_df) != len(edited):
+        return True
+    for idx in range(len(editor_df)):
+        orig = editor_df.iloc[idx]
+        curr = edited.iloc[idx]
+        if curr.get("类别") != orig.get("类别") or curr.get("收支") != orig.get("收支"):
+            return True
+    return False
 
 
 def render_bulk_editor(df: pd.DataFrame):
@@ -191,7 +243,10 @@ def render_bulk_editor(df: pd.DataFrame):
 
     # ── 预览匹配结果 ──
     with st.expander(f"📋 预览匹配的 {min(len(matched), 20)} 条记录", expanded=(len(matched) <= 10)):
-        preview = matched[["date", "merchant", "category", "amount", "source"]].head(20)
+        preview_cols = ["date", "merchant", "category", "amount", "source"]
+        if "trade_time" in matched.columns:
+            preview_cols.insert(1, "trade_time")
+        preview = matched[preview_cols].head(20)
         preview["date"] = preview["date"].astype(str)
         st.dataframe(preview, use_container_width=True, hide_index=True)
 

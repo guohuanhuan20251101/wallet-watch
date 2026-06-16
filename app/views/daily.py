@@ -90,4 +90,5 @@ def show_daily(df: pd.DataFrame):
         title=f"🔍 {selected_year}年{selected_month}月 详细订单",
         max_rows=100,
         show_source=True,
+        show_time=True,
     )

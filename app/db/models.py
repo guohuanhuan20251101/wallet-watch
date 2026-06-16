@@ -63,6 +63,7 @@ class FactTransaction(Base):
     source_id = Column(Integer, ForeignKey("dim_source.source_id"), nullable=False)
     amount = Column(Float, nullable=False)
     merchant = Column(String(200))
+    trade_time = Column(String(10))        # 交易时间 HH:MM:SS（可选，部分数据源提供）
     description = Column(Text)
     transaction_type = Column(String(10), default="支出")  # 支出 / 收入
     upload_batch = Column(String(50))      # 上传批次，溯源用
