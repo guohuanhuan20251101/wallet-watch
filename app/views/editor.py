@@ -17,7 +17,7 @@ def get_all_categories() -> list[str]:
 
 
 def _render_aggrid(df: pd.DataFrame, key: str):
-    """用 AgGrid 渲染表格（中文菜单、筛选、右边界自动填充）"""
+    """用 AgGrid 渲染表格（中文菜单、筛选、表格撑满容器宽度）"""
     gb = GridOptionsBuilder.from_dataframe(df)
     # 所有列禁止移动位置（防止列边框被拖走导致右边界漂移）
     gb.configure_default_column(
@@ -26,27 +26,29 @@ def _render_aggrid(df: pd.DataFrame, key: str):
         suppressMovable=True,
         minWidth=80,
     )
-    # 最后一列 flex=1 → 自动填满右侧剩余空间，右边界永远贴着容器最右边
-    last_col = str(df.columns[-1])
-    gb.configure_column(last_col, flex=1)
-    # 金额列宽度稍大，避免筛选图标和文字重叠
+    # 金额/数值列用数字筛选器
     for col in df.columns:
-        if "金额" in str(col) or "总支出" in str(col) or "总收入" in str(col) or "结余" in str(col) or "日均" in str(col):
-            gb.configure_column(str(col), minWidth=100, filter="agNumberColumnFilter")
-        elif "日期" in str(col) or "月份" in str(col):
-            gb.configure_column(str(col), minWidth=90)
-    # 中文筛选菜单
+        col_str = str(col)
+        if "金额" in col_str or "总支出" in col_str or "总收入" in col_str or "结余" in col_str or "日均" in col_str or "次数" in col_str or "笔数" in col_str or "排名" in col_str or "环比" in col_str:
+            gb.configure_column(col_str, minWidth=100, filter="agNumberColumnFilter")
+        elif "日期" in col_str or "月份" in col_str:
+            gb.configure_column(col_str, minWidth=90)
+    # 中文筛选菜单 + 表格撑满容器宽度（消除右侧空白）
     gb.configure_grid_options(
         localeText=_aggrid_zh_locale(),
         domLayout="autoHeight",
     )
     grid_options = gb.build()
+    # sizeToFit 让所有列自动填满容器宽度，右侧不会有空白
+    grid_options["suppressHorizontalScroll"] = True
 
     AgGrid(
         df,
         gridOptions=grid_options,
         update_mode=GridUpdateMode.NO_UPDATE,
+        height=None,
         allow_unsafe_jscode=True,
+        fit_columns_on_grid_load=True,
         key=key,
     )
 
