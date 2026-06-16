@@ -216,9 +216,10 @@ with st.sidebar:
         key="bill_uploader",
     )
 
-    # 刚导入完，跳过重新解析
+    # 刚导入完，清空上传器状态并刷新
     if st.session_state.get("import_done"):
         st.session_state["import_done"] = False
+        st.session_state.pop("bill_uploader", None)
         st.rerun()
 
     if uploaded_file:

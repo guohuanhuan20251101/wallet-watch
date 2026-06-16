@@ -119,6 +119,10 @@ def render_editable_table(
         col_names["transaction_type"] = "收支"
 
         view_df = display_df[show_cols].rename(columns=col_names).reset_index(drop=True)
+        # AgGrid 要求日期和时间为字符串，否则显示 [object Object]
+        view_df["日期"] = view_df["日期"].astype(str)
+        if "时间" in view_df.columns:
+            view_df["时间"] = view_df["时间"].fillna("").astype(str)
         view_df["金额"] = view_df["金额"].round(2)
         _render_aggrid(view_df, key=f"{key_prefix}_aggrid")
 
