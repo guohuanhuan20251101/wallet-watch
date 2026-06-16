@@ -218,31 +218,53 @@ def show_data_editor(df: pd.DataFrame):
 
         col_btn1, col_btn2 = st.columns(2)
         with col_btn1:
+            save_confirm_key = "dash_editor_save_confirm"
             if st.button("✅ 保存修改", use_container_width=True):
-                cat_obj = session.query(DimCategory).filter_by(category_name=new_cat).first()
-                tid = int(selected["transaction_id"])
-                txn = session.query(FactTransaction).filter_by(transaction_id=tid).first()
-                if txn and cat_obj:
-                    txn.category_id = cat_obj.category_id
-                    txn.transaction_type = new_type
-                    txn.merchant = new_merchant
-                    session.commit()
-                    st.cache_data.clear()
-                    st.success("已保存！刷新页面即可看到变化")
-                    st.rerun()
-                else:
-                    st.error("保存失败，请刷新后重试")
+                if not st.session_state.get(save_confirm_key):
+                    st.session_state[save_confirm_key] = True
+                    st.warning("⚠️ 确认保存此条记录的修改吗？")
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        if st.button("✅ 确认保存", key="dash_editor_confirm_save"):
+                            cat_obj = session.query(DimCategory).filter_by(category_name=new_cat).first()
+                            tid = int(selected["transaction_id"])
+                            txn = session.query(FactTransaction).filter_by(transaction_id=tid).first()
+                            if txn and cat_obj:
+                                txn.category_id = cat_obj.category_id
+                                txn.transaction_type = new_type
+                                txn.merchant = new_merchant
+                                session.commit()
+                                st.cache_data.clear()
+                                st.session_state[save_confirm_key] = False
+                                st.success("✅ 已保存！")
+                                st.rerun()
+                    with c2:
+                        if st.button("❌ 取消", key="dash_editor_cancel_save"):
+                            st.session_state[save_confirm_key] = False
+                            st.rerun()
 
         with col_btn2:
+            del_confirm_key = "dash_editor_del_confirm"
             if st.button("🗑️ 删除此记录", use_container_width=True):
-                tid = int(selected["transaction_id"])
-                txn = session.query(FactTransaction).filter_by(transaction_id=tid).first()
-                if txn:
-                    session.delete(txn)
-                    session.commit()
-                    st.cache_data.clear()
-                    st.success("已删除！刷新页面即可看到变化")
-                    st.rerun()
+                if not st.session_state.get(del_confirm_key):
+                    st.session_state[del_confirm_key] = True
+                    st.warning(f"⚠️ 确认删除此记录吗？\n\n> {selected['date']} | {selected['merchant']} | ¥{selected['amount']:.2f}")
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        if st.button("✅ 确认删除", key="dash_editor_confirm_del"):
+                            tid = int(selected["transaction_id"])
+                            txn = session.query(FactTransaction).filter_by(transaction_id=tid).first()
+                            if txn:
+                                session.delete(txn)
+                                session.commit()
+                                st.cache_data.clear()
+                                st.session_state[del_confirm_key] = False
+                                st.success("✅ 已删除！")
+                                st.rerun()
+                    with c2:
+                        if st.button("❌ 取消", key="dash_editor_cancel_del"):
+                            st.session_state[del_confirm_key] = False
+                            st.rerun()
 
     session.close()
 

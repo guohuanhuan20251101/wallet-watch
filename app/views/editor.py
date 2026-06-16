@@ -17,18 +17,21 @@ def get_all_categories() -> list[str]:
 
 
 def _render_aggrid(df: pd.DataFrame, key: str):
-    """用 AgGrid 渲染表格（中文菜单、Excel 式列筛选、独立列宽调整）"""
+    """用 AgGrid 渲染表格（中文菜单、Excel 式列筛选、右边界固定）"""
     gb = GridOptionsBuilder.from_dataframe(df)
+    # 所有列禁止移动（防止列边框被拖走导致右边界漂移）
     gb.configure_default_column(
         sortable=True,
         filter=True,
-        resizable=True,
+        suppressMovable=True,
         filterParams={"buttons": ["apply", "reset"], "closeOnApply": True},
     )
+    # 最后一列不可调整宽度 → 右边界钉在容器最右侧
+    last_col = str(df.columns[-1])
+    gb.configure_column(last_col, resizable=False)
     gb.configure_grid_options(
         localeText="zh-CN",
         domLayout="autoHeight",
-        suppressColumnVirtualisation=True,
     )
     grid_options = gb.build()
 
@@ -168,17 +171,53 @@ def render_editable_table(
                 orig = editor_df.iloc[idx]
                 curr = edited.iloc[idx]
                 if curr["类别"] != orig["类别"] or curr["收支"] != orig["收支"]:
-                    tid = int(orig["_tid"])
-                    _update_transaction(tid, curr["类别"], curr["收支"])
                     changed += 1
 
             if changed > 0:
-                st.cache_data.clear()
-                st.success(f"✅ 已保存 {changed} 条修改，刷新页面即可生效")
-                st.session_state[edit_key] = False
-                st.session_state[unsaved_key] = False
-                st.session_state.pop(from_editor_key, None)
-                st.rerun()
+                # ── 确认弹窗 ──
+                confirm_key = f"{key_prefix}_save_confirm"
+                if not st.session_state.get(confirm_key):
+                    st.session_state[confirm_key] = True
+                    st.warning(f"⚠️ 即将修改 **{changed}** 条记录，确认保存吗？")
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        if st.button("✅ 确认保存", key=f"{key_prefix}_confirm_yes"):
+                            for idx in range(len(editor_df)):
+                                if idx >= len(edited):
+                                    break
+                                orig = editor_df.iloc[idx]
+                                curr = edited.iloc[idx]
+                                if curr["类别"] != orig["类别"] or curr["收支"] != orig["收支"]:
+                                    tid = int(orig["_tid"])
+                                    _update_transaction(tid, curr["类别"], curr["收支"])
+                            st.cache_data.clear()
+                            st.session_state[confirm_key] = False
+                            st.session_state[edit_key] = False
+                            st.session_state[unsaved_key] = False
+                            st.session_state.pop(from_editor_key, None)
+                            st.success(f"✅ 已保存 {changed} 条修改")
+                            st.rerun()
+                    with c2:
+                        if st.button("❌ 取消", key=f"{key_prefix}_confirm_no"):
+                            st.session_state[confirm_key] = False
+                            st.rerun()
+                else:
+                    # 二次渲染（rerun 后 confirm_key=True），直接走确认流程
+                    for idx in range(len(editor_df)):
+                        if idx >= len(edited):
+                            break
+                        orig = editor_df.iloc[idx]
+                        curr = edited.iloc[idx]
+                        if curr["类别"] != orig["类别"] or curr["收支"] != orig["收支"]:
+                            tid = int(orig["_tid"])
+                            _update_transaction(tid, curr["类别"], curr["收支"])
+                    st.cache_data.clear()
+                    st.session_state[confirm_key] = False
+                    st.session_state[edit_key] = False
+                    st.session_state[unsaved_key] = False
+                    st.session_state.pop(from_editor_key, None)
+                    st.success(f"✅ 已保存 {changed} 条修改")
+                    st.rerun()
             else:
                 st.info("没有检测到修改")
 
@@ -277,16 +316,29 @@ def render_bulk_editor(df: pd.DataFrame):
         new_type = st.selectbox("改为类型", ["不修改", "支出", "收入"], key="bulk_new_type")
 
     if st.button("🚀 批量修改", type="primary", use_container_width=True, key="bulk_apply"):
-        changed = 0
-        for _, row in matched.iterrows():
-            tid = int(row["transaction_id"])
-            type_to_set = row["transaction_type"] if new_type == "不修改" else new_type
-            _update_transaction(tid, new_cat, type_to_set)
-            changed += 1
-
-        st.cache_data.clear()
-        st.success(f"✅ 已批量修改 {changed} 条记录，刷新页面即可生效")
-        st.rerun()
+        # ── 确认弹窗 ──
+        confirm_key = "bulk_apply_confirm"
+        if not st.session_state.get(confirm_key):
+            st.session_state[confirm_key] = True
+            type_label = f"类型→{new_type}" if new_type != "不修改" else "类型不变"
+            st.warning(f"⚠️ 即将修改 **{len(matched)}** 条记录（类别→{new_cat}，{type_label}），确认吗？")
+            c1, c2 = st.columns(2)
+            with c1:
+                if st.button("✅ 确认批量修改", key="bulk_confirm_yes"):
+                    changed = 0
+                    for _, row in matched.iterrows():
+                        tid = int(row["transaction_id"])
+                        type_to_set = row["transaction_type"] if new_type == "不修改" else new_type
+                        _update_transaction(tid, new_cat, type_to_set)
+                        changed += 1
+                    st.cache_data.clear()
+                    st.session_state[confirm_key] = False
+                    st.success(f"✅ 已批量修改 {changed} 条记录")
+                    st.rerun()
+            with c2:
+                if st.button("❌ 取消", key="bulk_confirm_no"):
+                    st.session_state[confirm_key] = False
+                    st.rerun()
 
 
 def _update_transaction(transaction_id: int, new_category: str, new_type: str):
