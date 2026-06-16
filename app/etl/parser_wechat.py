@@ -87,7 +87,9 @@ def parse_wechat_csv(filepath: str) -> pd.DataFrame:
     # 统一输出列
     result = pd.DataFrame()
     result["date"] = df["trade_time"].dt.date
-    result["trade_time"] = df["trade_time"].dt.strftime("%H:%M:%S")
+    result["trade_time"] = df["trade_time"].apply(
+        lambda t: t.strftime("%H:%M:%S") if pd.notna(t) and hasattr(t, 'strftime') else ""
+    )
     result["amount"] = df["amount"].abs()
     result["merchant"] = df.get("merchant", df.get("product", "")).fillna("未知商户")
     result["description"] = df.get("product", df.get("merchant", "")).fillna("")
@@ -148,7 +150,9 @@ def parse_wechat_excel(filepath: str) -> pd.DataFrame:
     if "trade_time" in df.columns:
         trade_dt = pd.to_datetime(df["trade_time"], errors="coerce")
         result["date"] = trade_dt.dt.date
-        result["trade_time"] = trade_dt.dt.strftime("%H:%M:%S")
+        result["trade_time"] = trade_dt.apply(
+            lambda t: t.strftime("%H:%M:%S") if pd.notna(t) and hasattr(t, 'strftime') else ""
+        )
     if "amount" in df.columns:
         result["amount"] = pd.to_numeric(df["amount"].astype(str).str.replace("¥", "").str.replace(",", ""),
                                          errors="coerce").abs()

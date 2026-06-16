@@ -104,8 +104,26 @@ def show_dashboard(df: pd.DataFrame):
     with st.expander("🔧 数据管理 - 批量修改 / 删除 / 导出报告"):
         # 导出按钮
         if not df.empty:
+            dates_sorted = sorted(df["date"].astype(str).unique())
+            date_range_str = f"{dates_sorted[0]} ~ {dates_sorted[-1]}"
+            export_time = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M")
+
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine="openpyxl") as writer:
+                # 报告封面
+                info_data = {
+                    "项目": ["报告名称", "数据范围", "导出时间", "总交易笔数", "总支出", "总收入"],
+                    "内容": [
+                        "Wallet Watch 财务报告",
+                        date_range_str,
+                        export_time,
+                        str(stats["transaction_count"]),
+                        f"¥{stats['total_expense']:,.0f}",
+                        f"¥{stats['total_income']:,.0f}",
+                    ],
+                }
+                pd.DataFrame(info_data).to_excel(writer, sheet_name="报告概要", index=False)
+
                 # 汇总
                 summary_data = {
                     "指标": ["总支出", "总收入", "交易笔数", "日均支出"],
@@ -129,10 +147,11 @@ def show_dashboard(df: pd.DataFrame):
                 # 全部明细
                 df.to_excel(writer, sheet_name="明细数据", index=False)
 
+            st.caption(f"📅 数据范围：{date_range_str}，共 {stats['transaction_count']} 条记录")
             st.download_button(
-                label="📥 导出 Excel 报告",
+                label=f"📥 导出 Excel 报告（{date_range_str}）",
                 data=output.getvalue(),
-                file_name=f"wallet_watch_report_{pd.Timestamp.now().strftime('%Y%m%d')}.xlsx",
+                file_name=f"wallet_watch_{date_range_str.replace(' ~ ', '_')}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             )
 
