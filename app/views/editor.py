@@ -98,6 +98,9 @@ def render_editable_table(
             "transaction_type": "类型",
         }, inplace=True)
 
+        # 重置索引，保证 edited 和 editor_df 行号一致
+        editor_df.reset_index(drop=True, inplace=True)
+
         # 加回 transaction_id 用于后续保存
         editor_df["_tid"] = display_df["transaction_id"].values
 
@@ -126,11 +129,15 @@ def render_editable_table(
 
         if st.button("💾 保存修改", key=f"{key_prefix}_save", type="primary"):
             changed = 0
-            for i, row in edited.iterrows():
-                orig = editor_df.iloc[i]
-                if row["类别"] != orig["类别"] or row["类型"] != orig["类型"]:
+            # 用 loc 按位置索引比对，因为两个 df 行数和顺序应一致
+            for idx in range(len(editor_df)):
+                if idx >= len(edited):
+                    break
+                orig = editor_df.iloc[idx]
+                curr = edited.iloc[idx]
+                if curr["类别"] != orig["类别"] or curr["类型"] != orig["类型"]:
                     tid = int(orig["_tid"])
-                    _update_transaction(tid, row["类别"], row["类型"])
+                    _update_transaction(tid, curr["类别"], curr["类型"])
                     changed += 1
 
             if changed > 0:
