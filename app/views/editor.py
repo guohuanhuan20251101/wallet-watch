@@ -3,6 +3,7 @@
 """
 import streamlit as st
 import pandas as pd
+from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
 from app.db.models import get_session, FactTransaction, DimCategory, DimSource
 
 
@@ -15,6 +16,28 @@ def get_all_categories() -> list[str]:
         session.close()
 
 
+def _render_aggrid(df: pd.DataFrame, key: str):
+    """用 AgGrid 渲染表格（中文菜单、可排序/筛选/固定列）"""
+    gb = GridOptionsBuilder.from_dataframe(df)
+    gb.configure_default_column(
+        sortable=True, filter=True, resizable=True,
+    )
+    gb.configure_grid_options(
+        localeText="zh-CN",
+        domLayout="autoHeight",
+    )
+    grid_options = gb.build()
+
+    AgGrid(
+        df,
+        gridOptions=grid_options,
+        update_mode=GridUpdateMode.NO_UPDATE,
+        allow_unsafe_jscode=True,
+        height=min(35 * len(df) + 56, 500),
+        key=key,
+    )
+
+
 def render_editable_table(
     df: pd.DataFrame,
     key_prefix: str,
@@ -25,12 +48,9 @@ def render_editable_table(
 ):
     """
     可编辑的交易表格组件
-    - 显示模式：st.dataframe，支持点击列头排序、搜索筛选（无需进入编辑模式）
+    - 显示模式：AgGrid（中文菜单，列头点击排序/筛选/固定列）
     - 编辑模式：st.data_editor，可直接在表内修改类别和类型
     - 退出编辑时如有未保存修改，弹出确认提示
-    - 只保存被修改的行
-
-    要求 df 包含列: transaction_id, date, trade_time, amount, merchant, category, source, transaction_type
     """
     if df.empty:
         st.info("暂无数据")
@@ -68,10 +88,8 @@ def render_editable_table(
     with col_btn:
         if st.session_state[edit_key]:
             if st.button("🔒 退出编辑", key=f"{key_prefix}_exit", use_container_width=True):
-                # 检查是否有未保存修改
                 if from_editor_key in st.session_state:
                     edited = st.session_state[from_editor_key]
-                    # 重建 editor_df 来比对
                     editor_df = _build_editor_df(df.head(max_rows), show_source, show_time)
                     if _has_changes(editor_df, edited):
                         st.session_state[unsaved_key] = True
@@ -88,7 +106,7 @@ def render_editable_table(
     display_df = df.head(max_rows).copy()
 
     if not st.session_state[edit_key]:
-        # ── 显示模式：st.dataframe（支持列头排序、搜索筛选）──
+        # ── 显示模式：AgGrid（中文列头菜单，支持排序/筛选/固定列）──
         show_cols = ["date", "merchant", "category", "amount"]
         col_names = {"date": "日期", "merchant": "商户", "category": "类别", "amount": "金额"}
         if show_time and "trade_time" in display_df.columns:
@@ -101,19 +119,12 @@ def render_editable_table(
         col_names["transaction_type"] = "收支"
 
         view_df = display_df[show_cols].rename(columns=col_names).reset_index(drop=True)
-        st.dataframe(
-            view_df,
-            use_container_width=True,
-            hide_index=True,
-            column_config={
-                "金额": st.column_config.NumberColumn(format="¥%.2f"),
-            },
-        )
+        view_df["金额"] = view_df["金额"].round(2)
+        _render_aggrid(view_df, key=f"{key_prefix}_aggrid")
 
     else:
-        # ── 编辑模式：st.data_editor ──
+        # ── 编辑模式：st.data_editor（下拉框编辑体验更好）──
         editor_df = _build_editor_df(display_df, show_source, show_time)
-        # 加回 transaction_id 用于后续保存
         editor_df["_tid"] = display_df["transaction_id"].values
 
         edited = st.data_editor(
@@ -132,7 +143,7 @@ def render_editable_table(
                     options=["支出", "收入"],
                     required=True,
                 ),
-                "_tid": None,  # 隐藏
+                "_tid": None,
             },
             use_container_width=True,
             hide_index=True,
@@ -140,7 +151,6 @@ def render_editable_table(
             key=from_editor_key,
         )
 
-        # ── 手动存到 session_state 以便退出时比对 ──
         st.session_state[from_editor_key] = edited
 
         if st.button("💾 保存修改", key=f"{key_prefix}_save", type="primary"):
@@ -244,11 +254,13 @@ def render_bulk_editor(df: pd.DataFrame):
     # ── 预览匹配结果 ──
     with st.expander(f"📋 预览匹配的 {min(len(matched), 20)} 条记录", expanded=(len(matched) <= 10)):
         preview_cols = ["date", "merchant", "category", "amount", "source"]
+        col_rename = {"date": "日期", "merchant": "商户", "category": "类别", "amount": "金额", "source": "来源"}
         if "trade_time" in matched.columns:
             preview_cols.insert(1, "trade_time")
-        preview = matched[preview_cols].head(20)
-        preview["date"] = preview["date"].astype(str)
-        st.dataframe(preview, use_container_width=True, hide_index=True)
+            col_rename["trade_time"] = "时间"
+        preview = matched[preview_cols].head(20).rename(columns=col_rename)
+        preview["日期"] = preview["日期"].astype(str)
+        _render_aggrid(preview, key="bulk_preview_aggrid")
 
     # ── 设置目标值 ──
     col_a, col_b = st.columns(2)
