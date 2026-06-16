@@ -17,14 +17,18 @@ def get_all_categories() -> list[str]:
 
 
 def _render_aggrid(df: pd.DataFrame, key: str):
-    """用 AgGrid 渲染表格（中文菜单、可排序/筛选/固定列）"""
+    """用 AgGrid 渲染表格（中文菜单、Excel 式列筛选、独立列宽调整）"""
     gb = GridOptionsBuilder.from_dataframe(df)
     gb.configure_default_column(
-        sortable=True, filter=True, resizable=True,
+        sortable=True,
+        filter=True,
+        resizable=True,
+        filterParams={"buttons": ["apply", "reset"], "closeOnApply": True},
     )
     gb.configure_grid_options(
         localeText="zh-CN",
         domLayout="autoHeight",
+        suppressColumnVirtualisation=True,
     )
     grid_options = gb.build()
 
@@ -33,7 +37,6 @@ def _render_aggrid(df: pd.DataFrame, key: str):
         gridOptions=grid_options,
         update_mode=GridUpdateMode.NO_UPDATE,
         allow_unsafe_jscode=True,
-        height=min(35 * len(df) + 56, 500),
         key=key,
     )
 

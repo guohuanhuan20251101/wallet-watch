@@ -5,6 +5,7 @@ import streamlit as st
 import pandas as pd
 from datetime import date
 from app.utils.charts import daily_bar_line, monthly_category_stack
+from app.views.editor import _render_aggrid
 
 
 def show_daily(df: pd.DataFrame):
@@ -73,8 +74,7 @@ def show_daily(df: pd.DataFrame):
     daily_detail["date"] = daily_detail["date"].dt.strftime("%m-%d")
     daily_detail = daily_detail.sort_values("date")
     daily_detail.columns = ["日期", "笔数", "支出", "收入"]
-
-    st.dataframe(daily_detail, use_container_width=True, hide_index=True)
+    _render_aggrid(daily_detail.reset_index(drop=True), key="daily_summary_aggrid")
 
     # ---- 当月详细订单（可编辑） ----
     st.divider()

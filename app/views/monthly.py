@@ -4,6 +4,7 @@
 import streamlit as st
 import pandas as pd
 from app.utils.charts import monthly_trend
+from app.views.editor import _render_aggrid
 
 
 def show_monthly(df: pd.DataFrame):
@@ -70,8 +71,7 @@ def show_monthly(df: pd.DataFrame):
 
     display = monthly_summary[["月份", "总支出", "总收入", "结余", "日均支出", "较上月变化"]]
     display.columns = ["月份", "总支出", "总收入", "结余", "日均支出", "环比变化"]
-
-    st.dataframe(display, use_container_width=True, hide_index=True)
+    _render_aggrid(display.reset_index(drop=True), key="monthly_summary_aggrid")
 
     # ---- 分类月度变化 ----
     st.subheader("📊 各分类月度趋势")

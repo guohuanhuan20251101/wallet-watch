@@ -6,6 +6,7 @@ import pandas as pd
 import io
 from app.transform.cleaner import get_summary_stats
 from app.utils.charts import monthly_trend, category_pie, year_over_year
+from app.views.editor import _render_aggrid
 
 
 def show_dashboard(df: pd.DataFrame):
@@ -62,7 +63,7 @@ def show_dashboard(df: pd.DataFrame):
             merchant_top["金额"] = merchant_top["金额"].round(2)
             merchant_top.index = range(1, len(merchant_top) + 1)
             merchant_top.index.name = "排名"
-            st.dataframe(merchant_top, use_container_width=True)
+            _render_aggrid(merchant_top.reset_index(), key="dash_merchant_aggrid")
         st.markdown('</div>', unsafe_allow_html=True)
 
     with col_right:
