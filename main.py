@@ -127,6 +127,7 @@ def load_all_transactions():
     try:
         from app.db.models import FactTransaction, DimSource, DimCategory as DBCat
         txns = session.query(
+            FactTransaction.transaction_id,
             FactTransaction.date_id.label("date"),
             FactTransaction.amount,
             FactTransaction.merchant,
@@ -141,12 +142,12 @@ def load_all_transactions():
 
         if not txns:
             return pd.DataFrame(columns=[
-                "date", "amount", "merchant", "description",
+                "transaction_id", "date", "amount", "merchant", "description",
                 "source", "category", "transaction_type"
             ])
 
         return pd.DataFrame(txns, columns=[
-            "date", "amount", "merchant", "description",
+            "transaction_id", "date", "amount", "merchant", "description",
             "source", "category", "transaction_type"
         ])
     finally:

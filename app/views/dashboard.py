@@ -89,35 +89,19 @@ def show_dashboard(df: pd.DataFrame):
     show_insights(df)
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # ── 最近交易表格 ──
-    st.markdown('<p class="section-title">🕐 最近交易记录</p>', unsafe_allow_html=True)
-    recent = df.sort_values("date", ascending=False).head(15).copy()
+    # ── 最近交易表格（可点击右上角 ✏️ 编辑）──
+    from app.views.editor import render_editable_table, render_bulk_editor
+    recent = df.sort_values("date", ascending=False).head(20).copy()
+    render_editable_table(
+        recent,
+        key_prefix="dash_recent",
+        title="🕐 最近交易记录",
+        max_rows=20,
+    )
 
-    rows_html = ""
-    for _, row in recent.iterrows():
-        src_cls = "wechat" if row["source"] == "微信" else "alipay"
-        amt_cls = "amount-expense" if row["transaction_type"] == "支出" else "amount-income"
-        rows_html += f"""
-        <tr>
-            <td>{row['date']}</td>
-            <td>{row['merchant']}</td>
-            <td><span class="badge">{row['category']}</span></td>
-            <td class="{amt_cls}">¥{row['amount']:.2f}</td>
-            <td><span class="badge {src_cls}">{row['source']}</span></td>
-        </tr>"""
-
-    st.markdown(f"""
-    <table class="styled-table">
-        <thead><tr>
-            <th>日期</th><th>商户</th><th>类别</th><th>金额</th><th>来源</th>
-        </tr></thead>
-        <tbody>{rows_html}</tbody>
-    </table>
-    """, unsafe_allow_html=True)
-
-    # ── 数据管理（编辑/删除/导出） ──
+    # ── 数据管理（批量修改 / 删除 / 导出）──
     st.divider()
-    with st.expander("🔧 数据管理 - 修改分类 / 删除记录 / 导出报告"):
+    with st.expander("🔧 数据管理 - 批量修改 / 删除 / 导出报告"):
         # 导出按钮
         if not df.empty:
             output = io.BytesIO()
@@ -153,11 +137,18 @@ def show_dashboard(df: pd.DataFrame):
             )
 
         st.divider()
+
+        # ── 批量修改 ──
+        render_bulk_editor(df)
+
+        st.divider()
+
+        # ── 单条精确修改（保留旧版）──
         show_data_editor(df)
 
 
 def show_data_editor(df: pd.DataFrame):
-    """数据编辑界面：修改分类、交易类型、删除"""
+    """单条精确编辑：搜索 → 选择记录 → 修改分类/类型/商户名/删除"""
     from app.db.models import get_session, FactTransaction, DimCategory, DimSource as DBSource
 
     session = get_session()
@@ -209,16 +200,14 @@ def show_data_editor(df: pd.DataFrame):
         with col_btn1:
             if st.button("✅ 保存修改", use_container_width=True):
                 cat_obj = session.query(DimCategory).filter_by(category_name=new_cat).first()
-                txn = session.query(FactTransaction).filter_by(
-                    date_id=pd.to_datetime(selected["date"]).date(),
-                    amount=selected["amount"],
-                    merchant=selected["merchant"],
-                ).first()
+                tid = int(selected["transaction_id"])
+                txn = session.query(FactTransaction).filter_by(transaction_id=tid).first()
                 if txn and cat_obj:
                     txn.category_id = cat_obj.category_id
                     txn.transaction_type = new_type
                     txn.merchant = new_merchant
                     session.commit()
+                    st.cache_data.clear()
                     st.success("已保存！刷新页面即可看到变化")
                     st.rerun()
                 else:
@@ -226,15 +215,12 @@ def show_data_editor(df: pd.DataFrame):
 
         with col_btn2:
             if st.button("🗑️ 删除此记录", use_container_width=True):
-                from app.db.models import FactTransaction as FT
-                txn = session.query(FT).filter_by(
-                    date_id=pd.to_datetime(selected["date"]).date(),
-                    amount=selected["amount"],
-                    merchant=selected["merchant"],
-                ).first()
+                tid = int(selected["transaction_id"])
+                txn = session.query(FactTransaction).filter_by(transaction_id=tid).first()
                 if txn:
                     session.delete(txn)
                     session.commit()
+                    st.cache_data.clear()
                     st.success("已删除！刷新页面即可看到变化")
                     st.rerun()
 

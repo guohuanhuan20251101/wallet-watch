@@ -75,3 +75,19 @@ def show_daily(df: pd.DataFrame):
     daily_detail.columns = ["日期", "笔数", "支出", "收入"]
 
     st.dataframe(daily_detail, use_container_width=True, hide_index=True)
+
+    # ---- 当月详细订单（可编辑） ----
+    st.divider()
+    from app.views.editor import render_editable_table
+
+    month_orders = view_df[mask].sort_values(["date", "amount"], ascending=[False, False]).copy()
+    # 转换回字符串格式给编辑器
+    month_orders["date"] = month_orders["date"].dt.strftime("%Y-%m-%d")
+
+    render_editable_table(
+        month_orders,
+        key_prefix="daily_orders",
+        title=f"🔍 {selected_year}年{selected_month}月 详细订单",
+        max_rows=100,
+        show_source=True,
+    )
