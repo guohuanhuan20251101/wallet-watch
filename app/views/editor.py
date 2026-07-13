@@ -16,7 +16,7 @@ def get_all_categories() -> list[str]:
         session.close()
 
 
-def _render_aggrid(df: pd.DataFrame, key: str):
+def _render_aggrid(df: pd.DataFrame, key: str, suppress_resize: bool = False):
     """用 AgGrid 渲染表格（中文菜单、筛选、表格撑满容器宽度）"""
     gb = GridOptionsBuilder.from_dataframe(df)
     # 所有列禁止移动位置（防止列边框被拖走导致右边界漂移）
@@ -24,23 +24,30 @@ def _render_aggrid(df: pd.DataFrame, key: str):
         sortable=True,
         filter=True,
         suppressMovable=True,
-        minWidth=80,
+        resizable=not suppress_resize,
+        minWidth=120, # 保证缩小浏览器时列不会缩得过小
     )
     # 金额/数值列用数字筛选器
     for col in df.columns:
         col_str = str(col)
         if "金额" in col_str or "总支出" in col_str or "总收入" in col_str or "结余" in col_str or "日均" in col_str or "次数" in col_str or "笔数" in col_str or "排名" in col_str or "环比" in col_str:
-            gb.configure_column(col_str, minWidth=100, filter="agNumberColumnFilter")
+            gb.configure_column(col_str, minWidth=110, filter="agNumberColumnFilter")
         elif "日期" in col_str or "月份" in col_str:
-            gb.configure_column(col_str, minWidth=90)
+            gb.configure_column(col_str, minWidth=110)
     # 中文筛选菜单 + 表格撑满容器宽度（消除右侧空白）
     gb.configure_grid_options(
         localeText=_aggrid_zh_locale(),
         domLayout="autoHeight",
     )
     grid_options = gb.build()
-    # sizeToFit 让所有列自动填满容器宽度，右侧不会有空白
-    grid_options["suppressHorizontalScroll"] = True
+    # 允许出现水平滚动条，不再一味压缩列宽
+    grid_options["suppressHorizontalScroll"] = False
+
+    if suppress_resize:
+        # 当禁止拖动列宽时，配置每一列使用 flex 弹性拉伸填充容器，彻底消除右侧留白
+        for col_def in grid_options.get("columnDefs", []):
+            if isinstance(col_def, dict):
+                col_def["flex"] = 1
 
     AgGrid(
         df,

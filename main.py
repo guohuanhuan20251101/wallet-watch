@@ -84,6 +84,32 @@ st.markdown("""
     .badge.wechat  { background: #e8f5e9; color: #2e7d32; }
     .badge.alipay  { background: #e3f2fd; color: #1565c0; }
 
+    /* ── 让 AgGrid 表格和 Streamlit 的列在宽度不足时支持水平滚动，并显示美观的滚动条 ── */
+    [data-testid="column"] {
+        overflow-x: auto !important;
+    }
+    
+    .ag-body-viewport {
+        overflow-x: auto !important;
+    }
+    
+    /* 自定义滚动条样式，使其不影响美观 */
+    ::-webkit-scrollbar {
+        height: 6px;
+        width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb {
+        background: #ccc;
+        border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+        background: #aaa;
+    }
+
     /* ── 图表容器 ── */
     .chart-box {
         background: white; border-radius: 12px; padding: 16px;
