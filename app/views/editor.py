@@ -31,13 +31,13 @@ def _render_aggrid(df: pd.DataFrame, key: str, suppress_resize: bool = False):
     for col in df.columns:
         col_str = str(col)
         if "排名" in col_str:
-            gb.configure_column(col_str, minWidth=60)
+            gb.configure_column(col_str, minWidth=60, maxWidth=80)
         elif "商家" in col_str or "商户" in col_str or "merchant" in col_str:
             gb.configure_column(col_str, minWidth=150)
         elif "金额" in col_str or "总支出" in col_str or "总收入" in col_str or "结余" in col_str or "日均" in col_str or "环比" in col_str:
-            gb.configure_column(col_str, minWidth=100, filter="agNumberColumnFilter")
+            gb.configure_column(col_str, minWidth=100, maxWidth=150, filter="agNumberColumnFilter")
         elif "次数" in col_str or "笔数" in col_str:
-            gb.configure_column(col_str, minWidth=80, filter="agNumberColumnFilter")
+            gb.configure_column(col_str, minWidth=80, maxWidth=120, filter="agNumberColumnFilter")
         elif "日期" in col_str or "月份" in col_str:
             gb.configure_column(col_str, minWidth=110)
         else:
@@ -83,7 +83,7 @@ def _render_aggrid(df: pd.DataFrame, key: str, suppress_resize: bool = False):
         height=None,
         allow_unsafe_jscode=True,
         fit_columns_on_grid_load=True,
-        theme="streamlit",  # 显式使用 streamlit 样式，防止主题默认 padding 留白
+        theme="alpine",  # 使用明晰的 alpine 主题，它的容器自适应最为严格，不易受 Streamlit 隐式样式和 padding 干扰
         key=key,
     )
 
