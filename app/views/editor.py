@@ -63,14 +63,15 @@ def _render_aggrid(df: pd.DataFrame, key: str, suppress_resize: bool = False):
     else:
         cols = grid_options.get("columnDefs", [])
         if cols and len(cols) > 0:
-            # 2. 最后一列右边界（次数列右边）彻底禁用拖拽，固定在容器最右端
+            # 2. 最后一列右边界（最右侧）彻底禁用拖拽，固定在容器最右端
             last_col = cols[-1]
             if isinstance(last_col, dict):
                 last_col["resizable"] = False
             
             # 3. 启用每一列的 flex 属性。
-            # 当所有列都有 flex 权重并且 suppressHorizontalScroll=True 时，
-            # 拖拽中间某列会导致其右侧列宽度按比例自适应挤压，整体宽度永久锁死在 100% 容器宽度。
+            # 为了确保初始加载和任何时刻都完美占满 100% 容器，我们需要强制所有的列都拥有 flex。
+            # 但 AgGrid 原生的 `fit_columns_on_grid_load` 如果和 `flex` 混用，有时会在计算初始列宽时冲突导致没有完全占满。
+            # 因此，我们不仅为每列配置 flex，还要在渲染配置里保证启用自动调整。
             for col_def in cols:
                 if isinstance(col_def, dict):
                     col_def["flex"] = 1
@@ -82,6 +83,7 @@ def _render_aggrid(df: pd.DataFrame, key: str, suppress_resize: bool = False):
         height=None,
         allow_unsafe_jscode=True,
         fit_columns_on_grid_load=True,
+        theme="streamlit",  # 显式使用 streamlit 样式，防止主题默认 padding 留白
         key=key,
     )
 
