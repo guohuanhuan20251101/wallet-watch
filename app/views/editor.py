@@ -24,7 +24,7 @@ def _render_aggrid(df: pd.DataFrame, key: str, suppress_resize: bool = False):
         sortable=True,
         filter=True,
         suppressMovable=True,
-        resizable=not suppress_resize,
+        resizable=True,  # 默认允许拖拽修改列宽
         minWidth=120, # 保证缩小浏览器时列不会缩得过小
     )
     # 金额/数值列用数字筛选器
@@ -48,6 +48,23 @@ def _render_aggrid(df: pd.DataFrame, key: str, suppress_resize: bool = False):
         for col_def in grid_options.get("columnDefs", []):
             if isinstance(col_def, dict):
                 col_def["flex"] = 1
+                col_def["resizable"] = False
+    else:
+        # 实现 Excel 同款列拖拽效果：
+        # 1. 中间所有列保留 resizable=True (已在 defaultColDef 配置)
+        # 2. 表格整体宽度固定铺满容器 (通过设置最后一列以外的列或自动填充)
+        # 3. 最后一列设置 flex: 1，并且 resizable=False 彻底禁用最右侧边界拖动，使其自动吸收剩余宽度
+        cols = grid_options.get("columnDefs", [])
+        if cols and len(cols) > 0:
+            for col_def in cols[:-1]:
+                if isinstance(col_def, dict):
+                    col_def["resizable"] = True
+            
+            # 最后一列：锁定最右侧边界禁止拖动，同时用 flex 吸收剩余空间，防止最右侧出现空白
+            last_col = cols[-1]
+            if isinstance(last_col, dict):
+                last_col["resizable"] = False
+                last_col["flex"] = 1
 
     AgGrid(
         df,

@@ -63,7 +63,8 @@ def show_dashboard(df: pd.DataFrame):
             merchant_top["金额"] = merchant_top["金额"].round(2)
             merchant_top.index = range(1, len(merchant_top) + 1)
             merchant_top.index.name = "排名"
-            _render_aggrid(merchant_top.reset_index(), key="dash_merchant_aggrid", suppress_resize=True)
+            # 允许列拖拽，但内部配置最后一列自适应且最右侧边界锁定
+            _render_aggrid(merchant_top.reset_index(), key="dash_merchant_aggrid", suppress_resize=False)
         st.markdown('</div>', unsafe_allow_html=True)
 
     with col_right:
