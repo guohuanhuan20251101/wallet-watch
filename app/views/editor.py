@@ -25,46 +25,55 @@ def _render_aggrid(df: pd.DataFrame, key: str, suppress_resize: bool = False):
         filter=True,
         suppressMovable=True,
         resizable=True,  # 默认允许拖拽修改列宽
-        minWidth=120, # 保证缩小浏览器时列不会缩得过小
     )
-    # 金额/数值列用数字筛选器
+    
+    # 针对不同列设置合理的 minWidth，确保数据文字完全可见、不会被遮挡
     for col in df.columns:
         col_str = str(col)
-        if "金额" in col_str or "总支出" in col_str or "总收入" in col_str or "结余" in col_str or "日均" in col_str or "次数" in col_str or "笔数" in col_str or "排名" in col_str or "环比" in col_str:
-            gb.configure_column(col_str, minWidth=110, filter="agNumberColumnFilter")
+        if "排名" in col_str:
+            gb.configure_column(col_str, minWidth=60)
+        elif "商家" in col_str or "商户" in col_str or "merchant" in col_str:
+            gb.configure_column(col_str, minWidth=150)
+        elif "金额" in col_str or "总支出" in col_str or "总收入" in col_str or "结余" in col_str or "日均" in col_str or "环比" in col_str:
+            gb.configure_column(col_str, minWidth=100, filter="agNumberColumnFilter")
+        elif "次数" in col_str or "笔数" in col_str:
+            gb.configure_column(col_str, minWidth=80, filter="agNumberColumnFilter")
         elif "日期" in col_str or "月份" in col_str:
             gb.configure_column(col_str, minWidth=110)
-    # 中文筛选菜单 + 表格撑满容器宽度（消除右侧空白）
+        else:
+            gb.configure_column(col_str, minWidth=100)
+
+    # 中文筛选菜单 + 表格自适应容器高度
     gb.configure_grid_options(
         localeText=_aggrid_zh_locale(),
         domLayout="autoHeight",
     )
     grid_options = gb.build()
-    # 允许出现水平滚动条，不再一味压缩列宽
-    grid_options["suppressHorizontalScroll"] = False
+    
+    # ── 完美复刻 Excel 拖拽逻辑 ──
+    # 1. 严格锁死整体表格宽度，禁止出现横向滚动条，禁止整体表格溢出外层容器
+    grid_options["suppressHorizontalScroll"] = True
 
     if suppress_resize:
-        # 当禁止拖动列宽时，配置每一列使用 flex 弹性拉伸填充容器，彻底消除右侧留白
+        # 当禁止拖动列宽时，配置每一列使用 flex 弹性拉伸填充容器
         for col_def in grid_options.get("columnDefs", []):
             if isinstance(col_def, dict):
                 col_def["flex"] = 1
                 col_def["resizable"] = False
     else:
-        # 实现 Excel 同款列拖拽效果：
-        # 1. 中间所有列保留 resizable=True (已在 defaultColDef 配置)
-        # 2. 表格整体宽度固定铺满容器 (通过设置最后一列以外的列或自动填充)
-        # 3. 最后一列设置 flex: 1，并且 resizable=False 彻底禁用最右侧边界拖动，使其自动吸收剩余宽度
         cols = grid_options.get("columnDefs", [])
         if cols and len(cols) > 0:
-            for col_def in cols[:-1]:
-                if isinstance(col_def, dict):
-                    col_def["resizable"] = True
-            
-            # 最后一列：锁定最右侧边界禁止拖动，同时用 flex 吸收剩余空间，防止最右侧出现空白
+            # 2. 最后一列右边界（次数列右边）彻底禁用拖拽，固定在容器最右端
             last_col = cols[-1]
             if isinstance(last_col, dict):
                 last_col["resizable"] = False
-                last_col["flex"] = 1
+            
+            # 3. 启用每一列的 flex 属性。
+            # 当所有列都有 flex 权重并且 suppressHorizontalScroll=True 时，
+            # 拖拽中间某列会导致其右侧列宽度按比例自适应挤压，整体宽度永久锁死在 100% 容器宽度。
+            for col_def in cols:
+                if isinstance(col_def, dict):
+                    col_def["flex"] = 1
 
     AgGrid(
         df,
